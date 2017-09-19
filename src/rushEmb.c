@@ -1002,7 +1002,7 @@ void socketSetUp(int socket)
 
 		printf("InitialReceive Buffer Size: %d\n", recvBuffSize);
 
-		recvBuffSize = MAX_BUFFER_SIZE;
+		recvBuffSize = MAX_BUFFER_SIZE * 20;
 		/* Set the buffer size to new value */
 		if (setsockopt(socket, SOL_SOCKET, SO_RCVBUF, &recvBuffSize, sizeof(recvBuffSize)) < 0)
 			DieWithError("setsockopt() failed");
@@ -1016,7 +1016,7 @@ void socketSetUp(int socket)
 
 void HandleTCPClient(int clntSocket)
 {
-	int32_t echoBuffer[MAX_BUFFER_SIZE/4]; /* Buffer for echo message */
+	int32_t echoBuffer[MAX_BUFFER_SIZE]; /* Buffer for echo message */
 	int recvMsgSize;             /* Size of received message */
 	int32_t nyceStatusBuffer[MAX_BUFFER_SIZE/4];
 	int statusBufferSize;

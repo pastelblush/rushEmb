@@ -185,7 +185,7 @@ enum{
 
 #define MAXPENDING 5                   /* Maximum outstanding connection requests */
 #define PORT 6666
-#define MAX_BUFFER_SIZE 5000
+#define MAX_BUFFER_SIZE 1024
 
 
 
