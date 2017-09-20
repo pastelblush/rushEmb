@@ -138,13 +138,11 @@ int main(void)
          return 0;
     }
 
+    //End previous udsx
+    EndForceUDSX();
 
     //initialize buffer
 	initializeBuffer();
-
-	//write to buffer
-	//strcpy(AXS_NAM0,"IDAM");
-	//AXS_TYPE[0] = 1;
 
 	//start server
 	stop_eth = 0;
@@ -175,12 +173,31 @@ int main(void)
 			case SYS_INIT:
 				puts("init");
 
-				printf("axis name %s \n",AXS_NAM0);
+
+				printf("axis name %s ",AXS_NAM0);
 				printf("axis type %d \n",AXS_TYPE[0]);
+				printf("axis name %s ",AXS_NAM1);
+				printf("axis type %d \n",AXS_TYPE[1]);
+				printf("axis name %s ",AXS_NAM2);
+				printf("axis type %d \n",AXS_TYPE[2]);
+				printf("axis name %s ",AXS_NAM3);
+				printf("axis type %d \n",AXS_TYPE[3]);
+				printf("axis name %s ",AXS_NAM4);
+				printf("axis type %d \n",AXS_TYPE[4]);
+				printf("axis name %s ",AXS_NAM5);
+				printf("axis type %d \n",AXS_TYPE[5]);
+				printf("axis name %s ",AXS_NAM6);
+				printf("axis type %d \n",AXS_TYPE[6]);
+				printf("axis name %s ",AXS_NAM7);
+				printf("axis type %d \n",AXS_TYPE[7]);
+				printf("axis name %s ",AXS_NAM8);
+				printf("axis type %d \n",AXS_TYPE[8]);
+				printf("axis name %s ",AXS_NAM9);
+				printf("axis type %d \n",AXS_TYPE[9]);
+
+
 				//init all axis
 				AxisInit();
-				//reset udsx
-				EndForceUDSX();
 				//Load UDSX
 				StartUdsx(nodeId, "/home/user/librushUDSX.so");
 				sys_case = SYS_READY;
@@ -200,7 +217,9 @@ int main(void)
 				EndForceUDSX();
 				sys_case = SYS_IDLE;
 				break;
+
 		}
+		usleep(10);
 
 
     }
@@ -217,6 +236,15 @@ int main(void)
       EndForceUDSX();
 
       Terminate();
+
+      retVal = NhiDisconnect(nodeId);
+      if ( NyceError(retVal) )
+      {
+
+           printf("NhiDisconnect Error %s\n", NyceGetStatusString(retVal));
+           return 0;
+      }
+
 
       retVal = NyceTerm();
       if (NyceError(retVal))
@@ -502,8 +530,6 @@ void NyceMainLoop(void)
 			pShmem_data->Shared_CtrFlag[ax + 50] = CTR_FLG[ax + 50];
 			pShmem_data->Shared_CtrFlag[ax + 60] = CTR_FLG[ax + 60];
 		}
-		usleep(100);//make task run abit slower
-		//printf("%0.2f \n",CTR_FLG[14]);
 	//}
 
 
@@ -1092,39 +1118,39 @@ int handleBuffer(void *arg)
 	{
 		memcpy(AXS_NAM0,&buffer[2],buffer[1]);
 	}
-	else if(buffer[0] == E_AXS_NAM0)
+	else if(buffer[0] == E_AXS_NAM1)
 	{
 		memcpy(AXS_NAM1,&buffer[2],buffer[1]);
 	}
-	else if(buffer[0] == E_AXS_NAM0)
+	else if(buffer[0] == E_AXS_NAM2)
 	{
 		memcpy(AXS_NAM2,&buffer[2],buffer[1]);
 	}
-	else if(buffer[0] == E_AXS_NAM0)
+	else if(buffer[0] == E_AXS_NAM3)
 	{
 		memcpy(AXS_NAM3,&buffer[2],buffer[1]);
 	}
-	else if(buffer[0] == E_AXS_NAM0)
+	else if(buffer[0] == E_AXS_NAM4)
 	{
 		memcpy(AXS_NAM4,&buffer[2],buffer[1]);
 	}
-	else if(buffer[0] == E_AXS_NAM0)
+	else if(buffer[0] == E_AXS_NAM5)
 	{
 		memcpy(AXS_NAM5,&buffer[2],buffer[1]);
 	}
-	else if(buffer[0] == E_AXS_NAM0)
+	else if(buffer[0] == E_AXS_NAM6)
 	{
 		memcpy(AXS_NAM6,&buffer[2],buffer[1]);
 	}
-	else if(buffer[0] == E_AXS_NAM0)
+	else if(buffer[0] == E_AXS_NAM7)
 	{
 		memcpy(AXS_NAM7,&buffer[2],buffer[1]);
 	}
-	else if(buffer[0] == E_AXS_NAM0)
+	else if(buffer[0] == E_AXS_NAM8)
 	{
 		memcpy(AXS_NAM8,&buffer[2],buffer[1]);
 	}
-	else if(buffer[0] == E_AXS_NAM0)
+	else if(buffer[0] == E_AXS_NAM9)
 	{
 		memcpy(AXS_NAM9,&buffer[2],buffer[1]);
 	}
