@@ -131,6 +131,9 @@ int main(void)
 
 
     retVal = NhiConnect("localhost", &nodeId);
+    printf("original node id is: %d \n",nodeId);
+
+
     if ( NyceError(retVal) )
     {
 
@@ -726,8 +729,19 @@ void initializeBuffer(void)
 
 void EndForceUDSX(void)
 {
-    NhiUdsxStop(nodeId);
-  }
+	NYCE_STATUS return_stat;
+	char return_filename[50];
+
+BOOL udsxRun;
+
+	printf("Stopping node id is: %d \n",nodeId);
+    NhiUdsxGetInfo(nodeId, &udsxRun, return_filename, NYCE_MAX_PATH_LENGTH);
+    if (udsxRun)
+    {
+    	return_stat = NhiUdsxStop(nodeId);
+    	printf("UDSX Stop Stat : %s \n the file is : %s",NyceGetStatusString(return_stat),return_filename);
+    }
+ }
 #endif
 
 #if defined(SO)
