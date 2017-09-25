@@ -98,6 +98,7 @@ void NyceMainLoop(void);
 void *clientThread(void *arg);
 void socketSetUp(int socket);
 void prepareStatusBuffer(void *statBuff, int* buffersize);
+int NyceDisconnectAxis(void);
 
 
 struct sockaddr_in echoServAddr; /* Local address */

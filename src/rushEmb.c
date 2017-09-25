@@ -131,6 +131,12 @@ int main(void)
 
 
     retVal = NhiConnect("localhost", &nodeId);
+    if (NyceError(retVal))
+    {
+       printf("NhiConnect Error %s\n", NyceGetStatusString(retVal));
+       return 0;
+    }
+
     printf("original node id is: %d \n",nodeId);
 
 
@@ -201,6 +207,8 @@ int main(void)
 
 				//init all axis
 				AxisInit();
+
+
 				//Load UDSX
 				StartUdsx(nodeId, "/home/user/librushUDSX.so");
 
@@ -741,7 +749,7 @@ BOOL udsxRun;
     if (udsxRun)
     {
     	return_stat = NhiUdsxStop(nodeId);
-    	printf("UDSX Stop Stat : %s \n the file is : %s",NyceGetStatusString(return_stat),return_filename);
+    	printf("UDSX Stop Stat : %s \n the file is : %s \n",NyceGetStatusString(return_stat),return_filename);
     }
  }
 #endif
