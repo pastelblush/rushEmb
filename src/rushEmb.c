@@ -89,6 +89,9 @@ void StartUdsx(NHI_NODE nodeId, const char* udsxFilePath);
 //nyce node
 NHI_NODE    nodeId;
 
+//mutex
+pthread_mutex_t lock;
+
 #if defined(BIN)
 #include <stdio.h>
 #include <stdlib.h>
@@ -113,6 +116,13 @@ int sys_case;
 
 int main(void)
 {
+	//init buffer mutex
+    if (pthread_mutex_init(&lock, NULL) != 0)
+    {
+        printf("\n mutex init failed\n");
+        return 1;
+    }
+
     NYCE_STATUS retVal;
 
     //connect to NYCE
@@ -219,7 +229,9 @@ int main(void)
 				break;
 			case SYS_READY:
 				//nyce main loop
-				//NyceMainLoop();
+				pthread_mutex_lock(&lock);
+					NyceMainLoop();
+				pthread_mutex_unlock(&lock);
 				if(CTR_FLG[19] != 255)
 				{
 					sys_case = SYS_STOP;
@@ -267,6 +279,9 @@ int main(void)
     	  printf("NyceTerm Error %s\n", NyceGetStatusString(retVal));
     	  return 0;
       }
+
+      //disable mutex
+      pthread_mutex_destroy(&lock);
 
 
     return (int)retVal;
@@ -355,33 +370,28 @@ void AxisInit(void)
 			StatusSConnect[ax] = SacConnect(Axis_Name[ax], &sacAxis[ax]);
 
 
-			if (StatusSConnect[ax] == 0)
+			if (NyceSuccess(StatusSConnect[ax]))
 			{
-				(void)SacReset(sacAxis[ax]);
-				(void)SacShutdown(sacAxis[ax]);
-				puts("axis connected");
-				SacConnected[ax] = 250;
+				if(NyceSuccess(SacReset(sacAxis[ax])))
+				{
+					SacSynchronize(sacAxis[ax],SAC_REQ_RESET,3);
+				}
+
+				if(NyceSuccess(SacShutdown(sacAxis[ax])))
+				{
+					SacSynchronize(sacAxis[ax],SAC_REQ_SHUTDOWN,3);
+				}
+
+				if(NyceSuccess(SacInitialize(sacAxis[ax], SAC_USE_FLASH)))
+				{
+					SacSynchronize(sacAxis[ax],SAC_REQ_INITIALIZE,3);
+					printf("axis %d connected\n",ax);
+					SacConnected[ax] = 255;
+				}
 			}
 		}
 	}
 
-
-	//-----------------
-    // Initialize the axes
-    //----------------
-    for ( ax = 0; ax < 10; ax++ )
-    {
-		if (SacConnected[ax] == 250)
-		{
-			StatusSConnect[ax] = SacInitialize(sacAxis[ax], SAC_USE_FLASH);
-
-			if (StatusSConnect[ax] == 0)
-			{
-				puts("axis initialized");
-				SacConnected[ax] = 255;
-			}
-		}
-	}
 
     for ( ax = 0; ax < 10; ax++ )
     {
@@ -465,12 +475,17 @@ void NyceMainLoop(void)
 									break;
 
 								case OpenLoop:
-									StatusOpenLoop[ax] = SacOpenLoop(sacAxis[ax]);
+									SacOpenLoop(sacAxis[ax]);
+									StatusOpenLoop[ax] = SacSynchronize(sacAxis[ax],SAC_REQ_OPEN_LOOP,3);
 									pShmem_data->Shared_StatFlag[ax] = 0x01;
 									break;
 
 								case AxisLock:
-									StatusLock[ax] = SacLock(sacAxis[ax]);
+									if (NyceError(SacLock(sacAxis[ax])))
+									{
+										printf("Lock Error Axis: %d\n",ax);
+									}
+									StatusLock[ax] = SacSynchronize(sacAxis[ax],SAC_REQ_LOCK,3);
 									pShmem_data->Shared_StatFlag[ax] = 0x01;
 									break;
 							}
@@ -495,7 +510,8 @@ void NyceMainLoop(void)
 								case OpenLoop:
 									StatusWParameter[ax] = SacWriteParameter(sacAxis[ax],SAC_PAR_OPEN_LOOP_RAMP,CTR_FLG[17]);
                                     StatusWParameter[ax] = SacWriteParameter(sacAxis[ax],SAC_PAR_OPEN_LOOP_VALUE,CTR_FLG[18]);
-									StatusOpenLoop[ax] = SacOpenLoop(sacAxis[ax]);
+									SacOpenLoop(sacAxis[ax]);
+									StatusOpenLoop[ax] = SacSynchronize(sacAxis[ax],SAC_REQ_OPEN_LOOP,3);
 									pShmem_data->Shared_StatFlag[ax] = 0x01;
 									break;
 
@@ -503,7 +519,8 @@ void NyceMainLoop(void)
 									puts("axis lock");
 									StatusWParameter[ax] = SacWriteParameter(sacAxis[ax],SAC_PAR_OPEN_LOOP_RAMP,CTR_FLG[17]);
                                     StatusWParameter[ax] = SacWriteParameter(sacAxis[ax],SAC_PAR_OPEN_LOOP_VALUE,0);
-									StatusLock[ax] = SacLock(sacAxis[ax]);
+									SacLock(sacAxis[ax]);
+									StatusLock[ax] = SacSynchronize(sacAxis[ax],SAC_REQ_LOCK,3);
 									pShmem_data->Shared_StatFlag[ax] = 0x01;
 									break;
 							}
@@ -1086,7 +1103,7 @@ void HandleTCPClient(int clntSocket)
 		handleBuffer(echoBuffer);
 		memset(echoBuffer,0,sizeof(echoBuffer));
 
-		NyceMainLoop();
+		//NyceMainLoop();
 
 
 
@@ -1110,7 +1127,7 @@ void HandleTCPClient(int clntSocket)
 		handleBuffer(echoBuffer);
 		memset(echoBuffer,0,sizeof(echoBuffer));
 
-		NyceMainLoop();
+		//NyceMainLoop();
 
 		if(stop_eth)
 		{
@@ -1126,9 +1143,11 @@ int handleBuffer(void *arg)
 {
 	int32_t *buffer;
 	float temporaryBuffer[500];
-	int count;
+	int count,retVar;
 	buffer = (int32_t *)arg;
 
+	retVar = 0;
+	pthread_mutex_lock(&lock);
 
 	if(buffer[0] == E_CMD_FLG)
 	{
@@ -1218,10 +1237,12 @@ int handleBuffer(void *arg)
 	}
 	else
 	{
-		return -1;
+		retVar = -1;
 	}
 
-	return 0;
+	pthread_mutex_unlock(&lock);
+
+	return retVar;
 }
 
 
