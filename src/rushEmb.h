@@ -138,6 +138,7 @@ int   TempAxType;
 float LAST_VC_POS[20];
 unsigned int LAST_STAT_FLG[10];
 float LAST_NET_CURRENT[10];
+float LAST_CMD_FLG[10];
 
 #define CMD_FLG     F_CMD_FLG_1
 #define CTR_FLG		F_CTR_FLG_1

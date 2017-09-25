@@ -208,6 +208,8 @@ int main(void)
 				//init all axis
 				AxisInit();
 
+				//End previous udsx
+				EndForceUDSX();
 
 				//Load UDSX
 				StartUdsx(nodeId, "/home/user/librushUDSX.so");
@@ -425,8 +427,8 @@ void NyceMainLoop(void)
 	int ax;
     int CmdType;
 
-	//while(CTR_FLG[19] == 255)
-	//{
+	if(CTR_FLG[19] == 255)
+	{
 
 		SPEED_FACTOR = CTR_FLG[10];
 
@@ -543,7 +545,7 @@ void NyceMainLoop(void)
 			pShmem_data->Shared_CtrFlag[ax + 50] = CTR_FLG[ax + 50];
 			pShmem_data->Shared_CtrFlag[ax + 60] = CTR_FLG[ax + 60];
 		}
-	//}
+	}
 
 
 }
@@ -742,14 +744,18 @@ void EndForceUDSX(void)
 	NYCE_STATUS return_stat;
 	char return_filename[50];
 
-BOOL udsxRun;
+	BOOL udsxRun;
 
 	printf("Stopping node id is: %d \n",nodeId);
     NhiUdsxGetInfo(nodeId, &udsxRun, return_filename, NYCE_MAX_PATH_LENGTH);
-    if (udsxRun)
+    if(udsxRun)
     {
     	return_stat = NhiUdsxStop(nodeId);
-    	printf("UDSX Stop Stat : %s \n the file is : %s \n",NyceGetStatusString(return_stat),return_filename);
+    	printf("UDSX Stop Stat : %s \n",NyceGetStatusString(return_stat));
+    }
+    else
+    {
+    	printf("No UDSX Running\n");
     }
  }
 #endif
@@ -1274,10 +1280,25 @@ void prepareStatusBuffer(void *statBuff, int* buffersize)
 		statusBuffer[0] |= 0x08;
 	}
 
+	for(count = 0; count < 10;count++)
+		{
+			//if(LAST_CMD_FLG[count] != CMD_FLG[count]||(update >= 200))
+			//{
+			//	LAST_CMD_FLG[count] = CMD_FLG[count];
+				statusBuffer[count + 10 + 20 + 10 + 1] = (int32_t)(CMD_FLG[count] * 10000);
+				if(CMD_FLG[count]>0)
+					printf("%d\n",statusBuffer[count + 10 + 20 + 10 + 1]);
+				statusBuffer[0] |= 0x10;
+			//}
+		}
 
+//if(statusBuffer[0] & 0x10)
+//	{
+		*buffersize = (10 + 10 + 10 + 20 + 1)*sizeof(int32_t);
+//	}
 //if(statusBuffer[0] & 0x04)
 //	{
-		*buffersize = (10 + 10 + 20 + 1)*sizeof(int32_t);
+//		*buffersize = (10 + 10 + 20 + 1)*sizeof(int32_t);
 //	}
 //	else if(statusBuffer[0] & 0x02)
 //	{
