@@ -203,11 +203,13 @@ int main(void)
 				AxisInit();
 				//Load UDSX
 				StartUdsx(nodeId, "/home/user/librushUDSX.so");
+
+				CTR_FLG[19] = 255;	//Terminate sequence flag
 				sys_case = SYS_READY;
 				break;
 			case SYS_READY:
 				//nyce main loop
-				NyceMainLoop();
+				//NyceMainLoop();
 				if(CTR_FLG[19] != 255)
 				{
 					sys_case = SYS_STOP;
@@ -401,7 +403,7 @@ void AxisInit(void)
 	CTR_FLG[16] = 0;	//Tweak table bypass
 	CTR_FLG[17] = 0;	//VC Open loop ramp
 	CTR_FLG[18] = 0;	//VC Open loop value
-	CTR_FLG[19] = 255;	//Terminate sequence flag
+	//CTR_FLG[19] = 255;	//Terminate sequence flag
 
 	CTR_FLG[40] = 250;	//VC soft landing default distance[AxisID]
 	CTR_FLG[41] = 0.005;//VC soft landing default duration
@@ -1070,6 +1072,8 @@ void HandleTCPClient(int clntSocket)
 		handleBuffer(echoBuffer);
 		memset(echoBuffer,0,sizeof(echoBuffer));
 
+		NyceMainLoop();
+
 
 
 	/* Send received string and receive again until end of transmission */
@@ -1091,6 +1095,8 @@ void HandleTCPClient(int clntSocket)
 
 		handleBuffer(echoBuffer);
 		memset(echoBuffer,0,sizeof(echoBuffer));
+
+		NyceMainLoop();
 
 		if(stop_eth)
 		{
