@@ -172,15 +172,6 @@ int main(void)
     (void)signal(SIGINT, IntHandler);
 
 
-    //Initialize the shared memory.
-    retVal = Initialize(TRUE);
-    if ( NyceError(retVal) )
-    {
-    	 printf("Initialize Error %s\n", NyceGetStatusString(retVal));
-         return 0;
-    }
-
-
     printf("Press Ctrl-C to stop\n");
     while (!g_stop)
     {
@@ -191,38 +182,8 @@ int main(void)
 				break;
 			case SYS_INIT:
 				puts("init");
-
-
-				printf("axis name %s ",AXS_NAM0);
-				printf("axis type %d \n",AXS_TYPE[0]);
-				printf("axis name %s ",AXS_NAM1);
-				printf("axis type %d \n",AXS_TYPE[1]);
-				printf("axis name %s ",AXS_NAM2);
-				printf("axis type %d \n",AXS_TYPE[2]);
-				printf("axis name %s ",AXS_NAM3);
-				printf("axis type %d \n",AXS_TYPE[3]);
-				printf("axis name %s ",AXS_NAM4);
-				printf("axis type %d \n",AXS_TYPE[4]);
-				printf("axis name %s ",AXS_NAM5);
-				printf("axis type %d \n",AXS_TYPE[5]);
-				printf("axis name %s ",AXS_NAM6);
-				printf("axis type %d \n",AXS_TYPE[6]);
-				printf("axis name %s ",AXS_NAM7);
-				printf("axis type %d \n",AXS_TYPE[7]);
-				printf("axis name %s ",AXS_NAM8);
-				printf("axis type %d \n",AXS_TYPE[8]);
-				printf("axis name %s ",AXS_NAM9);
-				printf("axis type %d \n",AXS_TYPE[9]);
-
-
 				//init all axis
 				AxisInit();
-
-				//End previous udsx
-				EndForceUDSX();
-
-				//Load UDSX
-				StartUdsx(nodeId, "/home/user/librushUDSX.so");
 
 				CTR_FLG[19] = 255;	//Terminate sequence flag
 				sys_case = SYS_READY;
@@ -262,8 +223,6 @@ int main(void)
       NyceDisconnectAxis();
       EndForceUDSX();
 
-      Terminate();
-
       retVal = NhiDisconnect(nodeId);
       if ( NyceError(retVal) )
       {
@@ -289,7 +248,8 @@ int main(void)
 
 void AxisInit(void)
 {
-	int ax;
+	int ax,retVal;
+	AXIS_SETTING axisSetting;
 
 	puts("NyceInit");
 
@@ -302,44 +262,44 @@ void AxisInit(void)
 	}
 
 	strcpy(TempName0,AXS_NAM0);
-	strcpy(pShmem_data->Shared_AxisName0,TempName0);
-	strcpy(Axis_Name[0],pShmem_data->Shared_AxisName0);
+	strcpy(axisSetting.Shared_AxisName0,TempName0);
+	strcpy(Axis_Name[0],axisSetting.Shared_AxisName0);
 
 	strcpy(TempName1,AXS_NAM1);
-	strcpy(pShmem_data->Shared_AxisName1,TempName1);
-	strcpy(Axis_Name[1],pShmem_data->Shared_AxisName1);
+	strcpy(axisSetting.Shared_AxisName1,TempName1);
+	strcpy(Axis_Name[1],axisSetting.Shared_AxisName1);
 
 	strcpy(TempName2,AXS_NAM2);
-	strcpy(pShmem_data->Shared_AxisName2,TempName2);
-	strcpy(Axis_Name[2],pShmem_data->Shared_AxisName2);
+	strcpy(axisSetting.Shared_AxisName2,TempName2);
+	strcpy(Axis_Name[2],axisSetting.Shared_AxisName2);
 
 	strcpy(TempName3,AXS_NAM3);
-	strcpy(pShmem_data->Shared_AxisName3,TempName3);
-	strcpy(Axis_Name[3],pShmem_data->Shared_AxisName3);
+	strcpy(axisSetting.Shared_AxisName3,TempName3);
+	strcpy(Axis_Name[3],axisSetting.Shared_AxisName3);
 
 	strcpy(TempName4,AXS_NAM4);
-	strcpy(pShmem_data->Shared_AxisName4,TempName4);
-	strcpy(Axis_Name[4],pShmem_data->Shared_AxisName4);
+	strcpy(axisSetting.Shared_AxisName4,TempName4);
+	strcpy(Axis_Name[4],axisSetting.Shared_AxisName4);
 
 	strcpy(TempName5,AXS_NAM5);
-	strcpy(pShmem_data->Shared_AxisName5,TempName5);
-	strcpy(Axis_Name[5],pShmem_data->Shared_AxisName5);
+	strcpy(axisSetting.Shared_AxisName5,TempName5);
+	strcpy(Axis_Name[5],axisSetting.Shared_AxisName5);
 
 	strcpy(TempName6,AXS_NAM6);
-	strcpy(pShmem_data->Shared_AxisName6,TempName6);
-	strcpy(Axis_Name[6],pShmem_data->Shared_AxisName6);
+	strcpy(axisSetting.Shared_AxisName6,TempName6);
+	strcpy(Axis_Name[6],axisSetting.Shared_AxisName6);
 
 	strcpy(TempName7,AXS_NAM7);
-	strcpy(pShmem_data->Shared_AxisName7,TempName7);
-	strcpy(Axis_Name[7],pShmem_data->Shared_AxisName7);
+	strcpy(axisSetting.Shared_AxisName7,TempName7);
+	strcpy(Axis_Name[7],axisSetting.Shared_AxisName7);
 
 	strcpy(TempName8,AXS_NAM8);
-	strcpy(pShmem_data->Shared_AxisName8,TempName8);
-	strcpy(Axis_Name[8],pShmem_data->Shared_AxisName8);
+	strcpy(axisSetting.Shared_AxisName8,TempName8);
+	strcpy(Axis_Name[8],axisSetting.Shared_AxisName8);
 
 	strcpy(TempName9,AXS_NAM9);
-	strcpy(pShmem_data->Shared_AxisName9,TempName9);
-	strcpy(Axis_Name[9],pShmem_data->Shared_AxisName9);
+	strcpy(axisSetting.Shared_AxisName9,TempName9);
+	strcpy(Axis_Name[9],axisSetting.Shared_AxisName9);
 
 // 	-------------------------
 // 			Axis Type
@@ -353,12 +313,52 @@ void AxisInit(void)
  	{
 		TempAxType = AXS_TYPE[ax];
 		Axis_Type[ax] = TempAxType;
-		pShmem_data->Shared_AxisType[ax] = Axis_Type[ax];
+		axisSetting.Shared_AxisType[ax] = Axis_Type[ax];
  	}
 
 	//FORCE_THRESHOLD = 3000;
 	//DP_THRESHOLD = 150;
 	//LINEAR_THRESHOLD = 800;
+
+
+
+ 	 if (NyceSuccess(NhiUdsxStart(nodeId, "/home/user/librushUDSX.so" , &axisSetting, (uint32_t)sizeof(axisSetting))))
+ 	 {
+ 		 	 	 	printf("UDSX started successfully.\n");
+ 	 }
+
+ 	//Initialize the shared memory.
+ 	retVal = Initialize(FALSE);
+ 	if ( NyceError(retVal) )
+ 	   {
+ 		printf("Initialize Error %s\n", NyceGetStatusString(retVal));
+ 	   }
+ 	else
+ 	{
+ 	 	 if(pShmem_data){
+	 	 	printf("axis name %s ",(char*)&pShmem_data->Shared_AxisName0);
+			printf("axis type %d \n",pShmem_data->Shared_AxisType[0]);
+			printf("axis name %s ",(char*)&pShmem_data->Shared_AxisName1);
+			printf("axis type %d \n",pShmem_data->Shared_AxisType[1]);
+			printf("axis name %s ",(char*)&pShmem_data->Shared_AxisName2);
+			printf("axis type %d \n",pShmem_data->Shared_AxisType[2]);
+			printf("axis name %s ",(char*)&pShmem_data->Shared_AxisName3);
+			printf("axis type %d \n",pShmem_data->Shared_AxisType[3]);
+			printf("axis name %s ",(char*)&pShmem_data->Shared_AxisName4);
+			printf("axis type %d \n",pShmem_data->Shared_AxisType[4]);
+			printf("axis name %s ",(char*)&pShmem_data->Shared_AxisName5);
+			printf("axis type %d \n",pShmem_data->Shared_AxisType[5]);
+			printf("axis name %s ",(char*)&pShmem_data->Shared_AxisName6);
+			printf("axis type %d \n",pShmem_data->Shared_AxisType[6]);
+			printf("axis name %s ",(char*)&pShmem_data->Shared_AxisName7);
+			printf("axis type %d \n",pShmem_data->Shared_AxisType[7]);
+			printf("axis name %s ",(char*)&pShmem_data->Shared_AxisName8);
+			printf("axis type %d \n",pShmem_data->Shared_AxisType[8]);
+			printf("axis name %s ",(char*)&pShmem_data->Shared_AxisName9);
+			printf("axis type %d \n",pShmem_data->Shared_AxisType[9]);
+ 	 	 }
+ 	}
+
 
 	//-----------------
     // Connect the axes
@@ -377,10 +377,10 @@ void AxisInit(void)
 					SacSynchronize(sacAxis[ax],SAC_REQ_RESET,3);
 				}
 
-				if(NyceSuccess(SacShutdown(sacAxis[ax])))
-				{
-					SacSynchronize(sacAxis[ax],SAC_REQ_SHUTDOWN,3);
-				}
+				//if(NyceSuccess(SacShutdown(sacAxis[ax])))
+				//{
+				//	SacSynchronize(sacAxis[ax],SAC_REQ_SHUTDOWN,3);
+				//}
 
 				if(NyceSuccess(SacInitialize(sacAxis[ax], SAC_USE_FLASH)))
 				{
@@ -392,26 +392,29 @@ void AxisInit(void)
 		}
 	}
 
-
-    for ( ax = 0; ax < 10; ax++ )
+    if (pShmem_data)
     {
-		SacMovedCnt[ax] = 0;
-		CMD_FLG[ax] = Cmd_Toggle[ax] = 0;
-		pShmem_data->Shared_StatFlag[ax] = 0x01;
-		pShmem_data->Shared_CtrFlag[ax] = CTR_FLG[ax] = 0;
-		pShmem_data->Shared_CtrFlag[ax + 10] = CTR_FLG[ax + 10] = 0;
 
-		if (Axis_Type[ax] == TURRET)
+		for ( ax = 0; ax < 10; ax++ )
 		{
-			pShmem_data->Shared_CtrFlag[ax + 20] = CTR_FLG[ax + 20] = 10;
-			pShmem_data->Shared_CtrFlag[ax + 30] = CTR_FLG[ax + 30] = 1;
-		}
-		else
-		{
-			pShmem_data->Shared_CtrFlag[ax + 20] = CTR_FLG[ax + 20] = 1000;
-			pShmem_data->Shared_CtrFlag[ax + 30] = CTR_FLG[ax + 30] = 1;
-		}
+			SacMovedCnt[ax] = 0;
+			CMD_FLG[ax] = Cmd_Toggle[ax] = 0;
+			pShmem_data->Shared_StatFlag[ax] = 0x01;
+			pShmem_data->Shared_CtrFlag[ax] = CTR_FLG[ax] = 0;
+			pShmem_data->Shared_CtrFlag[ax + 10] = CTR_FLG[ax + 10] = 0;
 
+			if (Axis_Type[ax] == TURRET)
+			{
+				pShmem_data->Shared_CtrFlag[ax + 20] = CTR_FLG[ax + 20] = 10;
+				pShmem_data->Shared_CtrFlag[ax + 30] = CTR_FLG[ax + 30] = 1;
+			}
+			else
+			{
+				pShmem_data->Shared_CtrFlag[ax + 20] = CTR_FLG[ax + 20] = 1000;
+				pShmem_data->Shared_CtrFlag[ax + 30] = CTR_FLG[ax + 30] = 1;
+			}
+
+		}
     }
 
 	CTR_FLG[10] = 4.5;	//speed factor
@@ -556,11 +559,13 @@ void NyceMainLoop(void)
 				}
 			}
 
-
-			pShmem_data->Shared_CtrFlag[ax] = CTR_FLG[ax];
-			pShmem_data->Shared_CtrFlag[ax + 10] = CTR_FLG[ax + 10];
-			pShmem_data->Shared_CtrFlag[ax + 50] = CTR_FLG[ax + 50];
-			pShmem_data->Shared_CtrFlag[ax + 60] = CTR_FLG[ax + 60];
+			if (pShmem_data)
+			{
+				pShmem_data->Shared_CtrFlag[ax] = CTR_FLG[ax];
+				pShmem_data->Shared_CtrFlag[ax + 10] = CTR_FLG[ax + 10];
+				pShmem_data->Shared_CtrFlag[ax + 50] = CTR_FLG[ax + 50];
+				pShmem_data->Shared_CtrFlag[ax + 60] = CTR_FLG[ax + 60];
+			}
 		}
 	}
 
@@ -577,8 +582,6 @@ int NyceDisconnectAxis(void)
 				StatusSDisconnect[ax] = SacDisconnect(sacAxis[ax]);
 			}
 	    }
-
-	(void)NyceTerm();
 	return 0;
 }
 
@@ -763,17 +766,18 @@ void EndForceUDSX(void)
 
 	BOOL udsxRun;
 
-	printf("Stopping node id is: %d \n",nodeId);
-    NhiUdsxGetInfo(nodeId, &udsxRun, return_filename, NYCE_MAX_PATH_LENGTH);
-    if(udsxRun)
-    {
+	Terminate();
+	//printf("Stopping node id is: %d \n",nodeId);
+    //NhiUdsxGetInfo(nodeId, &udsxRun, return_filename, NYCE_MAX_PATH_LENGTH);
+    //if(udsxRun)
+    //{
     	return_stat = NhiUdsxStop(nodeId);
-    	printf("UDSX Stop Stat : %s \n",NyceGetStatusString(return_stat));
-    }
-    else
-    {
-    	printf("No UDSX Running\n");
-    }
+    	//printf("UDSX Stop Stat : %s \n",NyceGetStatusString(return_stat));
+    //}
+    //else
+    //{
+    	//printf("No UDSX Running\n");
+    //}
  }
 #endif
 
@@ -1110,6 +1114,7 @@ void HandleTCPClient(int clntSocket)
 	/* Send received string and receive again until end of transmission */
 	while(recvMsgSize > 0) /* zero indicates end of transmission */
 	{
+		usleep(50);
 		/* Echo message back to client */
 		memset(nyceStatusBuffer,0,sizeof(nyceStatusBuffer));
 		prepareStatusBuffer(nyceStatusBuffer,&statusBufferSize);
@@ -1211,7 +1216,7 @@ int handleBuffer(void *arg)
 	{
 		memcpy(AXS_TYPE,&buffer[2],buffer[1]);
 	}
-	else if(buffer[0] == E_FORCE_LIMIT)
+	else if((buffer[0] == E_FORCE_LIMIT) && pShmem_data)
 	{
 		for(count = 0;count < buffer[1];count++)
 		{
@@ -1264,54 +1269,57 @@ void prepareStatusBuffer(void *statBuff, int* buffersize)
 	statusBuffer = (int32_t *)statBuff;
 	statusBuffer[0] = 0; //reset flag
 
-	for(count = 0; count < 20;count++)
+	if (pShmem_data)
 	{
-		//if(LAST_VC_POS[count] != pShmem_data->VC_POS[count]||(update >= 200))
-		//{
-		//	LAST_VC_POS[count] = pShmem_data->VC_POS[count];
-			statusBuffer[count + 1] = (int32_t)(pShmem_data->VC_POS[count] * 10000);
-			statusBuffer[0] |= 0x01;
-		//}
-	}
-
-	for(count = 0; count < 10;count++)
-	{
-		//if((LAST_STAT_FLG[count] != pShmem_data->Shared_StatFlag[count]) || (update >= 200))
-		//{
-		//	LAST_STAT_FLG[count] = pShmem_data->Shared_StatFlag[count];
-			statusBuffer[count + 20 + 1] = (int32_t)(pShmem_data->Shared_StatFlag[count]);
-			statusBuffer[0] |= 0x02;
-		//	update = 0;
-		//}
-	}
-
-	for(count = 0; count < 10;count++)
+		for(count = 0; count < 20;count++)
 		{
-			//if(LAST_NET_CURRENT[count] != pShmem_data->NET_CURRENT[count]||(update >= 200))
+			//if(LAST_VC_POS[count] != pShmem_data->VC_POS[count]||(update >= 200))
 			//{
-			//	LAST_NET_CURRENT[count] = pShmem_data->NET_CURRENT[count];
-				statusBuffer[count + 20 + 10 + 1] = (int32_t)(pShmem_data->NET_CURRENT[count] * 10000);
-				statusBuffer[0] |= 0x04;
+			//	LAST_VC_POS[count] = pShmem_data->VC_POS[count];
+				statusBuffer[count + 1] = (int32_t)(pShmem_data->VC_POS[count] * 10000);
+				statusBuffer[0] |= 0x01;
 			//}
 		}
 
-	//Tell system is ready
-	if(sys_case == SYS_READY)
-	{
-		statusBuffer[0] |= 0x08;
-	}
-
-	for(count = 0; count < 10;count++)
+		for(count = 0; count < 10;count++)
 		{
-			//if(LAST_CMD_FLG[count] != CMD_FLG[count]||(update >= 200))
+			//if((LAST_STAT_FLG[count] != pShmem_data->Shared_StatFlag[count]) || (update >= 200))
 			//{
-			//	LAST_CMD_FLG[count] = CMD_FLG[count];
-				statusBuffer[count + 10 + 20 + 10 + 1] = (int32_t)(CMD_FLG[count] * 10000);
-				if(CMD_FLG[count]>0)
-					printf("%d\n",statusBuffer[count + 10 + 20 + 10 + 1]);
-				statusBuffer[0] |= 0x10;
+			//	LAST_STAT_FLG[count] = pShmem_data->Shared_StatFlag[count];
+				statusBuffer[count + 20 + 1] = (int32_t)(pShmem_data->Shared_StatFlag[count]);
+				statusBuffer[0] |= 0x02;
+			//	update = 0;
 			//}
 		}
+
+		for(count = 0; count < 10;count++)
+			{
+				//if(LAST_NET_CURRENT[count] != pShmem_data->NET_CURRENT[count]||(update >= 200))
+				//{
+				//	LAST_NET_CURRENT[count] = pShmem_data->NET_CURRENT[count];
+					statusBuffer[count + 20 + 10 + 1] = (int32_t)(pShmem_data->NET_CURRENT[count] * 10000);
+					statusBuffer[0] |= 0x04;
+				//}
+			}
+
+		//Tell system is ready
+		if(sys_case == SYS_READY)
+		{
+			statusBuffer[0] |= 0x08;
+		}
+
+		for(count = 0; count < 10;count++)
+			{
+				//if(LAST_CMD_FLG[count] != CMD_FLG[count]||(update >= 200))
+				//{
+				//	LAST_CMD_FLG[count] = CMD_FLG[count];
+					statusBuffer[count + 10 + 20 + 10 + 1] = (int32_t)(CMD_FLG[count] * 10000);
+					if(CMD_FLG[count]>0)
+						printf("%d\n",statusBuffer[count + 10 + 20 + 10 + 1]);
+					statusBuffer[0] |= 0x10;
+				//}
+			}
+	}
 
 //if(statusBuffer[0] & 0x10)
 //	{
