@@ -377,10 +377,10 @@ void AxisInit(void)
 					SacSynchronize(sacAxis[ax],SAC_REQ_RESET,3);
 				}
 
-				//if(NyceSuccess(SacShutdown(sacAxis[ax])))
-				//{
-				//	SacSynchronize(sacAxis[ax],SAC_REQ_SHUTDOWN,3);
-				//}
+				if(NyceSuccess(SacShutdown(sacAxis[ax])))
+				{
+					SacSynchronize(sacAxis[ax],SAC_REQ_SHUTDOWN,3);
+				}
 
 				if(NyceSuccess(SacInitialize(sacAxis[ax], SAC_USE_FLASH)))
 				{
@@ -1107,7 +1107,6 @@ void HandleTCPClient(int clntSocket)
 		handleBuffer(echoBuffer);
 		memset(echoBuffer,0,sizeof(echoBuffer));
 
-		//NyceMainLoop();
 
 
 
@@ -1132,7 +1131,6 @@ void HandleTCPClient(int clntSocket)
 		handleBuffer(echoBuffer);
 		memset(echoBuffer,0,sizeof(echoBuffer));
 
-		//NyceMainLoop();
 
 		if(stop_eth)
 		{
@@ -1224,7 +1222,7 @@ int handleBuffer(void *arg)
 		}
 		memcpy(pShmem_data->FORCE_LIMIT,temporaryBuffer,buffer[1]);
 		memset(temporaryBuffer,0,500);
-		//printf("force limit : %.2f \n",pShmem_data->FORCE_LIMIT[5]);
+		printf("force limit : %.2f \n",pShmem_data->FORCE_LIMIT[5]);
 	}
 	else if(buffer[0] == E_NYCE_INIT)
 	{
@@ -1302,11 +1300,6 @@ void prepareStatusBuffer(void *statBuff, int* buffersize)
 				//}
 			}
 
-		//Tell system is ready
-		if(sys_case == SYS_READY)
-		{
-			statusBuffer[0] |= 0x08;
-		}
 
 		for(count = 0; count < 10;count++)
 			{
@@ -1319,6 +1312,13 @@ void prepareStatusBuffer(void *statBuff, int* buffersize)
 					statusBuffer[0] |= 0x10;
 				//}
 			}
+
+	}
+
+	//Tell system is ready
+	if(sys_case == SYS_READY)
+	{
+		statusBuffer[0] |= 0x08;
 	}
 
 //if(statusBuffer[0] & 0x10)
