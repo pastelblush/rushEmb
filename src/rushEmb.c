@@ -1247,7 +1247,7 @@ void prepareStatusBuffer(void *statBuff, int* buffersize)
 		for(count = 0; count < 10;count++)
 		{
 
-				statusBuffer->Shared_StatFlag[count] = pShmem_data->Shared_StatFlag[count];
+				statusBuffer->Shared_StatFlag[count] = pShmem_data->STAT_FLG[count];
 				statusBuffer->status |= 0x02;
 
 		}
