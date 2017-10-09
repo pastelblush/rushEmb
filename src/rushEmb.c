@@ -160,8 +160,6 @@ int main(void)
     //End previous udsx
     EndForceUDSX();
 
-    //initialize buffer
-	initializeBuffer();
 
 	//start server
 	stop_eth = 0;
@@ -728,36 +726,6 @@ void ExeParabolicProfile(int AxisID)
 	}
 }
 
-void initializeBuffer(void)
-{
-	int j;
-	for(j=0;j<10;j++)
-	{
-		F_CMD_FLG_1[j] = 0;
-		F_AXS_TYPE_1[j]= 0;
-	}
-
-	for(j=0;j<80;j++)
-	{
-		F_CTR_FLG_1[j] = 0;
-	}
-		//float F_CTR_FLG_1[40];
-
-	for(j=0;j<20;j++)
-	{
-
-		F_AXS1_NAM_0[j]= 0;
-		F_AXS1_NAM_1[j]= 0;
-		F_AXS1_NAM_2[j]= 0;
-		F_AXS1_NAM_3[j]= 0;
-		F_AXS1_NAM_4[j]= 0;
-		F_AXS1_NAM_5[j]= 0;
-		F_AXS1_NAM_6[j]= 0;
-		F_AXS1_NAM_7[j]= 0;
-		F_AXS1_NAM_8[j]= 0;
-		F_AXS1_NAM_9[j]= 0;
-	}
-}
 
 void EndForceUDSX(void)
 {
@@ -986,7 +954,7 @@ void *server(void *arg)
 {
 	char *str;
 	struct ThreadArgs *threadArgs;
-	int servSock,clntSock;
+	int servSock,clntSock,true_val = 1;
 
 
 
@@ -1008,6 +976,7 @@ void *server(void *arg)
 		echoServAddr.sin_port = htons(echoServPort);      /* Local port */
 
 		/* Bind to the local address */
+		setsockopt(socket, IPPROTO_TCP,SO_REUSEPORT, (void *)&true_val, sizeof(true_val));
 		if(bind(servSock, (struct sockaddr*)&echoServAddr, sizeof(echoServAddr)) < 0)
 			DieWithError("bind() failed");
 
@@ -1037,7 +1006,7 @@ void *server(void *arg)
 			threadArgs-> clntSock = clntSock;
 
 			/* clntSock is connected to a client! */
-			printf("Handlingclient %s\n", inet_ntoa(echoClntAddr.sin_addr));
+			printf("Handling Client %s\n", inet_ntoa(echoClntAddr.sin_addr));
 			pthread_create(&pth,NULL,clientThread,(void*)threadArgs);
 			puts("client thread created");
 
@@ -1088,24 +1057,30 @@ void socketSetUp(int socket)
 		tv.tv_sec = 3000;  /* 3 Secs Timeout */
 		setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
 		setsockopt(socket, SOL_SOCKET, SO_SNDTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
-		setsockopt( socket, IPPROTO_TCP,0x0001, (void *)&true_val, sizeof(true_val));
+		setsockopt(socket, IPPROTO_TCP,SO_KEEPALIVE, (void *)&true_val, sizeof(true_val));
 }
 
 void HandleTCPClient(int clntSocket)
 {
-	int32_t echoBuffer[MAX_BUFFER_SIZE]; /* Buffer for echo message */
+	char* echoBuffer; /* Buffer for echo message */
+	struct cmd_buff cmdBuffer;
 	int recvMsgSize;             /* Size of received message */
-	int32_t nyceStatusBuffer[MAX_BUFFER_SIZE/4];
-	int statusBufferSize;
+	struct resp_buff nyceStatusBuffer;
+	int statusBufferSize,resp_cmd;
 
 
-	puts("system dataexchange ready");
+	echoBuffer = malloc(sizeof(struct cmd_buff) + 256);
+
+	puts("system data exchange ready");
 	/* Receive message from client */
-	if((recvMsgSize = recv(clntSocket, echoBuffer, sizeof(echoBuffer), 0)) < 0)
+
+	resp_cmd = 0;
+	memset(echoBuffer,0,sizeof(struct cmd_buff) + 256);
+	if((recvMsgSize = recv(clntSocket, echoBuffer, sizeof(struct cmd_buff) + 256, 0)) < 0)
 		DieWithError("recv() failed");
 
-		handleBuffer(echoBuffer);
-		memset(echoBuffer,0,sizeof(echoBuffer));
+	memcpy(&cmdBuffer,echoBuffer,sizeof(cmdBuffer));
+	handleBuffer(&cmdBuffer,&resp_cmd);
 
 
 
@@ -1113,23 +1088,28 @@ void HandleTCPClient(int clntSocket)
 	/* Send received string and receive again until end of transmission */
 	while(recvMsgSize > 0) /* zero indicates end of transmission */
 	{
-		usleep(50);
-		/* Echo message back to client */
-		memset(nyceStatusBuffer,0,sizeof(nyceStatusBuffer));
-		prepareStatusBuffer(nyceStatusBuffer,&statusBufferSize);
 
-		if(send(clntSocket, nyceStatusBuffer, statusBufferSize, 0)  < 0)
-			DieWithError("send() failed");
 
-		//to put the handler
-		memset(nyceStatusBuffer,0,sizeof(nyceStatusBuffer));
+		if(resp_cmd){
+			memset(&nyceStatusBuffer,0,sizeof(nyceStatusBuffer));
+			prepareStatusBuffer(&nyceStatusBuffer,&statusBufferSize);
+			if(send(clntSocket, &nyceStatusBuffer, statusBufferSize, 0)  < 0)
+						DieWithError("send() failed");
+		}else
+		{
+			if(send(clntSocket, &resp_cmd, sizeof(resp_cmd), 0)  < 0)
+									DieWithError("send() failed");
+		}
 
+
+		resp_cmd = 0;
+		memset(echoBuffer,0,sizeof(struct cmd_buff) + 256);
 		/* See if there is more data to receive */
-		if((recvMsgSize = recv(clntSocket, echoBuffer, sizeof(echoBuffer), 0)) < 0)
+		if((recvMsgSize = recv(clntSocket, echoBuffer, sizeof(struct cmd_buff) + 256, 0)) < 0)
 			DieWithError("connection terminated");
 
-		handleBuffer(echoBuffer);
-		memset(echoBuffer,0,sizeof(echoBuffer));
+		memcpy(&cmdBuffer,echoBuffer,sizeof(cmdBuffer));
+		handleBuffer(echoBuffer,&resp_cmd);
 
 
 		if(stop_eth)
@@ -1142,108 +1122,98 @@ void HandleTCPClient(int clntSocket)
 	printf("client socket close \n");
 }
 
-int handleBuffer(void *arg)
+int handleBuffer(void *arg, int* resp_cmd)
 {
-	int32_t *buffer;
-	float temporaryBuffer[500];
+	struct cmd_buff *buffer;
 	int count,retVar;
-	buffer = (int32_t *)arg;
+	buffer = (struct cmd_buff *)arg;
+	int cmdFlg;
 
 	retVar = 0;
-	pthread_mutex_lock(&lock);
 
-	if(buffer[0] == E_CMD_FLG)
-	{
-		for(count = 0;count < buffer[1];count++)
-		{
-			temporaryBuffer[count] = (float)buffer[count + 2] / 10000.00;
-		}
-		memcpy(CMD_FLG,temporaryBuffer,buffer[1]);
-		memset(temporaryBuffer,0,500);
-	}
-	else if(buffer[0] == E_CTR_FLG)
-	{
-		for(count = 0;count < buffer[1];count++)
-		{
-			temporaryBuffer[count] = (float)buffer[count + 2] / 10000.00;
-		}
-		memcpy(CTR_FLG,temporaryBuffer,buffer[1]);
-		memset(temporaryBuffer,0,500);
-	}
-	else if(buffer[0] == E_AXS_NAM0)
-	{
-		memcpy(AXS_NAM0,&buffer[2],buffer[1]);
-	}
-	else if(buffer[0] == E_AXS_NAM1)
-	{
-		memcpy(AXS_NAM1,&buffer[2],buffer[1]);
-	}
-	else if(buffer[0] == E_AXS_NAM2)
-	{
-		memcpy(AXS_NAM2,&buffer[2],buffer[1]);
-	}
-	else if(buffer[0] == E_AXS_NAM3)
-	{
-		memcpy(AXS_NAM3,&buffer[2],buffer[1]);
-	}
-	else if(buffer[0] == E_AXS_NAM4)
-	{
-		memcpy(AXS_NAM4,&buffer[2],buffer[1]);
-	}
-	else if(buffer[0] == E_AXS_NAM5)
-	{
-		memcpy(AXS_NAM5,&buffer[2],buffer[1]);
-	}
-	else if(buffer[0] == E_AXS_NAM6)
-	{
-		memcpy(AXS_NAM6,&buffer[2],buffer[1]);
-	}
-	else if(buffer[0] == E_AXS_NAM7)
-	{
-		memcpy(AXS_NAM7,&buffer[2],buffer[1]);
-	}
-	else if(buffer[0] == E_AXS_NAM8)
-	{
-		memcpy(AXS_NAM8,&buffer[2],buffer[1]);
-	}
-	else if(buffer[0] == E_AXS_NAM9)
-	{
-		memcpy(AXS_NAM9,&buffer[2],buffer[1]);
-	}
-	else if(buffer[0] == E_AXS_TYPE)
-	{
-		memcpy(AXS_TYPE,&buffer[2],buffer[1]);
-	}
-	else if((buffer[0] == E_FORCE_LIMIT) && pShmem_data)
-	{
-		for(count = 0;count < buffer[1];count++)
-		{
-			temporaryBuffer[count] = (float)buffer[count + 2] / 10000.00;
-		}
-		memcpy(pShmem_data->FORCE_LIMIT,temporaryBuffer,buffer[1]);
-		memset(temporaryBuffer,0,500);
-		printf("force limit : %.2f \n",pShmem_data->FORCE_LIMIT[5]);
-	}
-	else if(buffer[0] == E_NYCE_INIT)
-	{
-		sys_case = SYS_INIT;
-		puts("SYSTEM INIT");
-	}
-	else if(buffer[0] == E_NYCE_STOP)
-	{
-		sys_case = SYS_STOP;
-		puts("SYSTEM STOP");
-	}
-	else if(buffer[0] == E_PING)
-	{
-		;//no action
-	}
-	else
-	{
-		retVar = -1;
+	cmdFlg = buffer->cmd/10000;
+	*resp_cmd = 0;
+
+	switch(cmdFlg){
+	default:
+		if(buffer->cmd == E_CMD_FLG)
+			{
+				memcpy(CMD_FLG,buffer->fbuff,buffer->size);
+			}
+			else if(buffer->cmd == E_CTR_FLG)
+			{
+				memcpy(CTR_FLG,buffer->fbuff,buffer->size);
+			}
+			else if(buffer->cmd == E_AXS_NAM0)
+			{
+				memcpy(AXS_NAM0,buffer->cbuff,buffer->size);
+			}
+			else if(buffer->cmd == E_AXS_NAM1)
+			{
+				memcpy(AXS_NAM1,buffer->cbuff,buffer->size);
+			}
+			else if(buffer->cmd == E_AXS_NAM2)
+			{
+				memcpy(AXS_NAM2,buffer->cbuff,buffer->size);
+			}
+			else if(buffer->cmd == E_AXS_NAM3)
+			{
+				memcpy(AXS_NAM3,buffer->cbuff,buffer->size);
+			}
+			else if(buffer->cmd == E_AXS_NAM4)
+			{
+				memcpy(AXS_NAM4,buffer->cbuff,buffer->size);
+			}
+			else if(buffer->cmd == E_AXS_NAM5)
+			{
+				memcpy(AXS_NAM5,buffer->cbuff,buffer->size);
+			}
+			else if(buffer->cmd == E_AXS_NAM6)
+			{
+				memcpy(AXS_NAM6,buffer->cbuff,buffer->size);
+			}
+			else if(buffer->cmd == E_AXS_NAM7)
+			{
+				memcpy(AXS_NAM7,buffer->cbuff,buffer->size);
+			}
+			else if(buffer->cmd == E_AXS_NAM8)
+			{
+				memcpy(AXS_NAM8,buffer->cbuff,buffer->size);
+			}
+			else if(buffer->cmd == E_AXS_NAM9)
+			{
+				memcpy(AXS_NAM9,buffer->cbuff,buffer->size);
+			}
+			else if(buffer->cmd == E_AXS_TYPE)
+			{
+				memcpy(AXS_TYPE,buffer->ibuff,buffer->size);
+			}
+			else if((buffer->cmd == E_FORCE_LIMIT) && pShmem_data)
+			{
+				memcpy(pShmem_data->FORCE_LIMIT,buffer->fbuff,buffer->size);
+			}
+			else if(buffer->cmd == E_NYCE_INIT)
+			{
+				sys_case = SYS_INIT;
+				puts("SYSTEM INIT");
+			}
+			else if(buffer->cmd == E_NYCE_STOP)
+			{
+				sys_case = SYS_STOP;
+				puts("SYSTEM STOP");
+			}
+			else
+			{
+				retVar = -1;
+			}
+		break;
+
+	case 2:
+		*resp_cmd = buffer->cmd - (2 * 10000);
+		break;
 	}
 
-	pthread_mutex_unlock(&lock);
+
 
 	return retVar;
 }
@@ -1260,87 +1230,47 @@ void DieWithError(char* errorMessage)
 
 void prepareStatusBuffer(void *statBuff, int* buffersize)
 {
-	int32_t *statusBuffer;
+	struct resp_buff *statusBuffer;
 	int count;
-//	static int update;
 
-	statusBuffer = (int32_t *)statBuff;
-	statusBuffer[0] = 0; //reset flag
+	statusBuffer = (struct resp_buff *)statBuff;
+	statusBuffer->status = 0; //reset flag
 
 	if (pShmem_data)
 	{
 		for(count = 0; count < 20;count++)
 		{
-			//if(LAST_VC_POS[count] != pShmem_data->VC_POS[count]||(update >= 200))
-			//{
-			//	LAST_VC_POS[count] = pShmem_data->VC_POS[count];
-				statusBuffer[count + 1] = (int32_t)(pShmem_data->VC_POS[count] * 10000);
-				statusBuffer[0] |= 0x01;
-			//}
+				statusBuffer->VC_POS[count] = pShmem_data->VC_POS[count];
+				statusBuffer->status |= 0x01;
 		}
 
 		for(count = 0; count < 10;count++)
 		{
-			//if((LAST_STAT_FLG[count] != pShmem_data->Shared_StatFlag[count]) || (update >= 200))
-			//{
-			//	LAST_STAT_FLG[count] = pShmem_data->Shared_StatFlag[count];
-				statusBuffer[count + 20 + 1] = (int32_t)(pShmem_data->Shared_StatFlag[count]);
-				statusBuffer[0] |= 0x02;
-			//	update = 0;
-			//}
+
+				statusBuffer->Shared_StatFlag[count] = pShmem_data->Shared_StatFlag[count];
+				statusBuffer->status |= 0x02;
+
 		}
 
 		for(count = 0; count < 10;count++)
 			{
-				//if(LAST_NET_CURRENT[count] != pShmem_data->NET_CURRENT[count]||(update >= 200))
-				//{
-				//	LAST_NET_CURRENT[count] = pShmem_data->NET_CURRENT[count];
-					statusBuffer[count + 20 + 10 + 1] = (int32_t)(pShmem_data->NET_CURRENT[count] * 10000);
-					statusBuffer[0] |= 0x04;
-				//}
+					statusBuffer->NET_CURRENT[count] = pShmem_data->NET_CURRENT[count];
+					statusBuffer->status |= 0x04;
 			}
 
 
 		for(count = 0; count < 10;count++)
 			{
-				//if(LAST_CMD_FLG[count] != CMD_FLG[count]||(update >= 200))
-				//{
-				//	LAST_CMD_FLG[count] = CMD_FLG[count];
-					statusBuffer[count + 10 + 20 + 10 + 1] = (int32_t)(CMD_FLG[count] * 10000);
-					if(CMD_FLG[count]>0)
-						printf("%d\n",statusBuffer[count + 10 + 20 + 10 + 1]);
-					statusBuffer[0] |= 0x10;
-				//}
+					statusBuffer->CMD_FLG[count]= CMD_FLG[count];
+					statusBuffer->status |= 0x10;
 			}
 
 	}
 
-	//Tell system is ready
-	if(sys_case == SYS_READY)
-	{
-		statusBuffer[0] |= 0x08;
-	}
 
-//if(statusBuffer[0] & 0x10)
-//	{
-		*buffersize = (10 + 10 + 10 + 20 + 1)*sizeof(int32_t);
-//	}
-//if(statusBuffer[0] & 0x04)
-//	{
-//		*buffersize = (10 + 10 + 20 + 1)*sizeof(int32_t);
-//	}
-//	else if(statusBuffer[0] & 0x02)
-//	{
-//		*buffersize = (10 + 20 + 1)*sizeof(int32_t);
-//	}
-//	else if(statusBuffer[0] & 0x01)
-//	{
-//		*buffersize = (20)*sizeof(int32_t);
-//	}
-//	else
-//	{
-//		*buffersize = (1)*sizeof(uint32_t);
-//	}
-//
-//	update++;
+		statusBuffer->sys_case = sys_case;
+		statusBuffer->status |= 0x08;
+
+		*buffersize = sizeof(struct resp_buff);
+
 }

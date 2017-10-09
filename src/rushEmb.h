@@ -108,7 +108,7 @@ struct ThreadArgs {
 void DieWithError(char* errorMessage); /* Error handling function */
 void HandleTCPClient(int clntSocketc);   /* TCP client handling function */
 void *server(void *arg);
-int handleBuffer(void *arg);
+int handleBuffer(void *arg,int* resp_cmd);
 void *ExecuteCmd(void *arg);
 void initializeBuffer(void);
 void NyceMainLoop(void);
@@ -125,51 +125,6 @@ unsigned int clntLen;           /* Length of client address data structure */
 pthread_t pth,serverpth,execmd;
 
 
-
-float F_CMD_FLG_1[10];
-float F_CTR_FLG_1[80];
-char  F_AXS1_NAM_0[20];
-char  F_AXS1_NAM_1[20];
-char  F_AXS1_NAM_2[20];
-char  F_AXS1_NAM_3[20];
-char  F_AXS1_NAM_4[20];
-char  F_AXS1_NAM_5[20];
-char  F_AXS1_NAM_6[20];
-char  F_AXS1_NAM_7[20];
-char  F_AXS1_NAM_8[20];
-char  F_AXS1_NAM_9[20];
-int   F_AXS_TYPE_1[10];
-
-char  TempName0[20];
-char  TempName1[20];
-char  TempName2[20];
-char  TempName3[20];
-char  TempName4[20];
-char  TempName5[20];
-char  TempName6[20];
-char  TempName7[20];
-char  TempName8[20];
-char  TempName9[20];
-int   TempAxType;
-
-float LAST_VC_POS[20];
-unsigned int LAST_STAT_FLG[10];
-float LAST_NET_CURRENT[10];
-float LAST_CMD_FLG[10];
-
-#define CMD_FLG     F_CMD_FLG_1
-#define CTR_FLG		F_CTR_FLG_1
-#define AXS_NAM0	F_AXS1_NAM_0
-#define AXS_NAM1	F_AXS1_NAM_1
-#define AXS_NAM2	F_AXS1_NAM_2
-#define AXS_NAM3	F_AXS1_NAM_3
-#define AXS_NAM4	F_AXS1_NAM_4
-#define AXS_NAM5	F_AXS1_NAM_5
-#define AXS_NAM6	F_AXS1_NAM_6
-#define AXS_NAM7	F_AXS1_NAM_7
-#define AXS_NAM8	F_AXS1_NAM_8
-#define AXS_NAM9	F_AXS1_NAM_9
-#define AXS_TYPE	F_AXS_TYPE_1
 
 
 
@@ -294,4 +249,24 @@ enum{
 	SYS_READY,
 	SYS_STOP,
 };
+
+typedef struct resp_buff
+{
+	int					status;
+	int					sys_case;
+	float 				VC_POS[20];
+	float 				FORCE_LIMIT[10];
+	float 				NET_CURRENT[10];
+	float				CMD_FLG[10];
+	unsigned int		Shared_StatFlag[10];
+}RESP_BUFF;
+
+typedef struct cmd_buff
+{
+	int					cmd;
+	int					size;
+	float				fbuff[80];
+	char				cbuff[20];
+	int					ibuff[20];
+}CMD_BUFF;
 #endif
