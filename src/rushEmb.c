@@ -24,7 +24,9 @@
  */
 
 #define BIN
+#define DEBUG 0
 
+#include <stdio.h>
 #include <stdint.h>
 #include <string.h>
 #include <unistd.h>
@@ -33,6 +35,7 @@
 #include <sactypes.h>
 #include "sysapi.h"
 #include "udsxapi.h"
+#include <time.h>
 
 /////////tcp communication
 
@@ -113,17 +116,24 @@ void IntHandler(int signum)
 }
 
 int sys_case;
+char logstr[80];
 
 int main(void)
 {
+	 initLogFile();
 	//init buffer mutex
+
+
     if (pthread_mutex_init(&lock, NULL) != 0)
     {
         printf("\n mutex init failed\n");
         return 1;
     }
+    logging(100,(float)0,"Init mutex","success"); ///// log
+
 
     NYCE_STATUS retVal;
+
 
     //connect to NYCE
     retVal = NyceInit(NYCE_ETH);
@@ -132,12 +142,16 @@ int main(void)
     	printf("NyceInit Error %s\n", NyceGetStatusString(retVal));
     	return 0;
     }
+    logging(100,0,"Init NyceInit",NyceGetStatusString(retVal)); ///// log
+
+
 
 	while((!NyceSuccess(SysSynchronize(SYS_REQ_NETWORK_OPERATIONAL,0,10))))
 	{
 		puts("waiting for SysSynchronize");
 	}
     puts("SysSynchronize done");
+    logging(100,0,"Wait for sys synchrounous",NyceGetStatusString(retVal)); ///// log
 
 
     retVal = NhiConnect("localhost", &nodeId);
@@ -146,16 +160,7 @@ int main(void)
        printf("NhiConnect Error %s\n", NyceGetStatusString(retVal));
        return 0;
     }
-
-    printf("original node id is: %d \n",nodeId);
-
-
-    if ( NyceError(retVal) )
-    {
-
-         printf("NhiConnect Error %s\n", NyceGetStatusString(retVal));
-         return 0;
-    }
+    logging(100,0,"Nhi connect",NyceGetStatusString(retVal));  ////////////////log
 
     //End previous udsx
     EndForceUDSX();
@@ -164,11 +169,11 @@ int main(void)
 	//start server
 	stop_eth = 0;
 	pthread_create(&serverpth,NULL,server,"in thread");
+	logging(100,0,"Start ETH server","success");  ////////////////log
 
 
 	//signal handler
     (void)signal(SIGINT, IntHandler);
-
 
     printf("Press Ctrl-C to stop\n");
     while (!g_stop)
@@ -180,23 +185,25 @@ int main(void)
 				break;
 			case SYS_INIT:
 				puts("init");
+				logging(123,sys_case,"Initialising","status"); ///// log
 				//init all axis
 				AxisInit();
-
 				CTR_FLG[19] = 255;	//Terminate sequence flag
 				sys_case = SYS_READY;
 				break;
 			case SYS_READY:
 				//nyce main loop
-				pthread_mutex_lock(&lock);
-					NyceMainLoop();
-				pthread_mutex_unlock(&lock);
+				logging(123,sys_case,"system ready","status"); ///// log
+				//pthread_mutex_lock(&lock);
+				//	NyceMainLoop();
+				//pthread_mutex_unlock(&lock);
 				if(CTR_FLG[19] != 255)
 				{
 					sys_case = SYS_STOP;
 				}
 				break;
 			case SYS_STOP:
+				logging(123,sys_case,"system stop","status"); ///// log
 				puts("stop");
 				CTR_FLG[19] = 0;
 				NyceDisconnectAxis();
@@ -205,7 +212,7 @@ int main(void)
 				break;
 
 		}
-		usleep(10);
+		usleep(500000);
 
 
     }
@@ -213,13 +220,20 @@ int main(void)
         /*
          * Terminate the shared memory before we stop the application.
          */
+
       stop_eth = 1;
       puts("terminating eth");
       sleep(1); // wait all eth close
+      logging(100,1,"stopping ETH","success");  ////////////////log
 
       //in case of force termination
+
       NyceDisconnectAxis();
+      logging(100,1,"disconnect axis","success");  ////////////////log
+
+
       EndForceUDSX();
+
 
       retVal = NhiDisconnect(nodeId);
       if ( NyceError(retVal) )
@@ -229,6 +243,8 @@ int main(void)
            return 0;
       }
 
+      logging(100,1,"Nhi disconnected",NyceGetStatusString(retVal));  ////////////////log
+
 
       retVal = NyceTerm();
       if (NyceError(retVal))
@@ -236,9 +252,12 @@ int main(void)
     	  printf("NyceTerm Error %s\n", NyceGetStatusString(retVal));
     	  return 0;
       }
+      logging(100,1,"nyce terminated",NyceGetStatusString(retVal));  ////////////////log
 
       //disable mutex
       pthread_mutex_destroy(&lock);
+
+      closeLogFile();
 
 
     return (int)retVal;
@@ -323,16 +342,21 @@ void AxisInit(void)
  	 if (NyceSuccess(NhiUdsxStart(nodeId, "/home/user/librushUDSX.so" , &axisSetting, (uint32_t)sizeof(axisSetting))))
  	 {
  		 	 	 	printf("UDSX started successfully.\n");
+ 		 	 	 	logging(144,1,"UDSX started","/home/user/librushUDSX.so");  ////////////////log
  	 }
+
+
 
  	//Initialize the shared memory.
  	retVal = Initialize(FALSE);
  	if ( NyceError(retVal) )
  	   {
  		printf("Initialize Error %s\n", NyceGetStatusString(retVal));
+ 		logging(144,1,"initialise shared memory failed",NyceGetStatusString(retVal));  ////////////////log
  	   }
  	else
  	{
+ 		logging(144,1,"shared memory started",NyceGetStatusString(retVal));  ////////////////log
  	 	 if(pShmem_data){
 	 	 	printf("axis name %s ",(char*)&pShmem_data->Shared_AxisName0);
 			printf("axis type %d \n",pShmem_data->Shared_AxisType[0]);
@@ -361,31 +385,47 @@ void AxisInit(void)
 	//-----------------
     // Connect the axes
     //----------------
+//    for ( ax = 0; ax < 10; ax++ )
+//    {
+//		if (Axis_Type[ax] != NA)
+//		{
+//			StatusSConnect[ax] = SacConnect(Axis_Name[ax], &sacAxis[ax]);
+//
+//
+//			if (NyceSuccess(StatusSConnect[ax]))
+//			{
+//				if(NyceSuccess(SacReset(sacAxis[ax])))
+//				{
+//					SacSynchronize(sacAxis[ax],SAC_REQ_RESET,3);
+//				}
+//
+//				if(NyceSuccess(SacShutdown(sacAxis[ax])))
+//				{
+//					SacSynchronize(sacAxis[ax],SAC_REQ_SHUTDOWN,3);
+//				}
+//
+//				if(NyceSuccess(SacInitialize(sacAxis[ax], SAC_USE_FLASH)))
+//				{
+//					SacSynchronize(sacAxis[ax],SAC_REQ_INITIALIZE,3);
+//					printf("axis %d connected\n",ax);
+//					SacConnected[ax] = 255;
+//				}
+//			}
+//		}
+//	}
+
     for ( ax = 0; ax < 10; ax++ )
     {
 		if (Axis_Type[ax] != NA)
 		{
 			StatusSConnect[ax] = SacConnect(Axis_Name[ax], &sacAxis[ax]);
 
-
-			if (NyceSuccess(StatusSConnect[ax]))
+			if (StatusSConnect[ax] == 0)
 			{
-				if(NyceSuccess(SacReset(sacAxis[ax])))
-				{
-					SacSynchronize(sacAxis[ax],SAC_REQ_RESET,3);
-				}
-
-				if(NyceSuccess(SacShutdown(sacAxis[ax])))
-				{
-					SacSynchronize(sacAxis[ax],SAC_REQ_SHUTDOWN,3);
-				}
-
-				if(NyceSuccess(SacInitialize(sacAxis[ax], SAC_USE_FLASH)))
-				{
-					SacSynchronize(sacAxis[ax],SAC_REQ_INITIALIZE,3);
-					printf("axis %d connected\n",ax);
-					SacConnected[ax] = 255;
-				}
+				//SacAlignMotor(sacAxis[ax]);
+				//SacSynchronize(sacAxis[ax], SAC_REQ_ALIGN_MOTOR, 5.0);
+				SacConnected[ax] = 255;
+				logging(ax,(float)SacConnected[ax],"From 144 : SacConnect","sac Connected");  ////////////////log
 			}
 		}
 	}
@@ -455,6 +495,7 @@ void NyceMainLoop(void)
 
 				if (CMD_FLG[ax] != 0)
 				{
+					logging(ax,CMD_FLG[ax],"CMD_FLG"," NyceMainLoop");  ////////////////log
 					oldCmdPos[ax] = CMD_FLG[ax];
 					switch(Axis_Type[ax])
 					{
@@ -472,16 +513,19 @@ void NyceMainLoop(void)
 							switch(CmdType)
 							{
 								default:
+									logging(ax,(float)pShmem_data->Shared_StatFlag[ax],"default","turret");  ////////////////log
 									ExeParabolicProfile(ax);
 									break;
 
 								case OpenLoop:
+									logging(ax,(float)pShmem_data->Shared_StatFlag[ax],"open loop","turret");  ////////////////log
 									SacOpenLoop(sacAxis[ax]);
 									StatusOpenLoop[ax] = SacSynchronize(sacAxis[ax],SAC_REQ_OPEN_LOOP,3);
 									pShmem_data->Shared_StatFlag[ax] = 0x01;
-									break;
+						 			break;
 
 								case AxisLock:
+									logging(ax,(float)pShmem_data->Shared_StatFlag[ax],"open loop","turret");  ////////////////log
 									if (NyceError(SacLock(sacAxis[ax])))
 									{
 										printf("Lock Error Axis: %d\n",ax);
@@ -495,20 +539,23 @@ void NyceMainLoop(void)
 						case VC_PUSHER:
 							m_sacPtpPars[ax].positionReference = SAC_ABSOLUTE;
 							CmdType = CMD_FLG[ax]/10000;
-							switch(CmdType)
+			 				switch(CmdType)
 							{
 								default:
+									logging(ax,(float)pShmem_data->Shared_StatFlag[ax],"default","pusher");  ////////////////log
 									ExeParabolicProfile(ax);
 									break;
 
 								case ChgWorkPos:
+									logging(ax,(float)pShmem_data->Shared_StatFlag[ax],"change work position","pusher");  ////////////////log
 									CMD_FLG[ax] = CMD_FLG[ax] - ChgWorkPos*10000;
 									CTR_FLG[ax] = CMD_FLG[ax];
 
-									ExeParabolicProfile(ax);
+			 						ExeParabolicProfile(ax);
 									break;
 
 								case OpenLoop:
+									logging(ax,(float)pShmem_data->Shared_StatFlag[ax],"open loop","pusher");  ////////////////log
 									StatusWParameter[ax] = SacWriteParameter(sacAxis[ax],SAC_PAR_OPEN_LOOP_RAMP,CTR_FLG[17]);
                                     StatusWParameter[ax] = SacWriteParameter(sacAxis[ax],SAC_PAR_OPEN_LOOP_VALUE,CTR_FLG[18]);
 									SacOpenLoop(sacAxis[ax]);
@@ -518,6 +565,7 @@ void NyceMainLoop(void)
 
 								case AxisLock:
 									puts("axis lock");
+									logging(ax,(float)pShmem_data->Shared_StatFlag[ax],"lock","pusher");  ////////////////log
 									StatusWParameter[ax] = SacWriteParameter(sacAxis[ax],SAC_PAR_OPEN_LOOP_RAMP,CTR_FLG[17]);
                                     StatusWParameter[ax] = SacWriteParameter(sacAxis[ax],SAC_PAR_OPEN_LOOP_VALUE,0);
 									SacLock(sacAxis[ax]);
@@ -529,11 +577,13 @@ void NyceMainLoop(void)
 							break;
 
 						case STD_ABS:
+							logging(ax,pShmem_data->Shared_StatFlag[ax],"STD_ABS","STD");  ////////////////log
 							m_sacPtpPars[ax] .positionReference = SAC_ABSOLUTE;
 							ExeParabolicProfile(ax);
 							break;
 
 						case STD_REL:
+							logging(ax,pShmem_data->Shared_StatFlag[ax],"STD_REL","STD");  ////////////////log
 							m_sacPtpPars[ax] .positionReference = SAC_RELATIVE;
 							ExeParabolicProfile(ax);
 							break;
@@ -549,6 +599,7 @@ void NyceMainLoop(void)
 					}
 
 					pShmem_data->Shared_StatFlag[ax] |= Cmd_Toggle[ax]*0x80;
+					logging(ax,pShmem_data->Shared_StatFlag[ax],"Shared_StatFlag"," NyceMainLoop");  ////////////////log
 
 					oldPtpPos[ax] = CMD_FLG[ax];
 					CMD_FLG[ax] = 0;
@@ -557,8 +608,7 @@ void NyceMainLoop(void)
 				}
 			}
 
-			if (pShmem_data)
-			{
+			if(pShmem_data){
 				pShmem_data->Shared_CtrFlag[ax] = CTR_FLG[ax];
 				pShmem_data->Shared_CtrFlag[ax + 10] = CTR_FLG[ax + 10];
 				pShmem_data->Shared_CtrFlag[ax + 50] = CTR_FLG[ax + 50];
@@ -578,6 +628,7 @@ int NyceDisconnectAxis(void)
 			if (SacConnected[ax] == 255)
 			{
 				StatusSDisconnect[ax] = SacDisconnect(sacAxis[ax]);
+				logging(ax,(float)StatusSDisconnect[ax],"SacDisconnect","nyce disconnect axis");  ////////////////log
 			}
 	    }
 	return 0;
@@ -740,6 +791,8 @@ void EndForceUDSX(void)
     //if(udsxRun)
     //{
     	return_stat = NhiUdsxStop(nodeId);
+
+    	logging(1,(float)return_stat,"NhiUdsxStop","EndForceUDSX");  ////////////////log
     	//printf("UDSX Stop Stat : %s \n",NyceGetStatusString(return_stat));
     //}
     //else
@@ -976,18 +1029,32 @@ void *server(void *arg)
 		echoServAddr.sin_port = htons(echoServPort);      /* Local port */
 
 		/* Bind to the local address */
-		setsockopt(socket, IPPROTO_TCP,SO_REUSEPORT, (void *)&true_val, sizeof(true_val));
+		setsockopt(servSock, SOL_SOCKET,SO_REUSEPORT, &true_val, sizeof(true_val));
 		if(bind(servSock, (struct sockaddr*)&echoServAddr, sizeof(echoServAddr)) < 0)
+		{
+			logging(177,177,"bind failed","server");
 			DieWithError("bind() failed");
+		}else
+		{
+			puts("bind done");
+			logging(177,177,"bind done","server");
+		}
 
-		puts("bind done");
 
 
 		/* Mark the socket so it will listen for incoming connections */
 		if(listen(servSock, MAXPENDING) < 0)
+		{
+			logging(177,177,"listen failed","server");
 			DieWithError("listen() failed");
+		}else
+		{
+			puts("listen done");
+			logging(177,177,"listen done","server");
+		}
 
-		puts("listen done");
+
+
 		//check buffer size
 
 		for(;;) /* Run forever */
@@ -996,8 +1063,14 @@ void *server(void *arg)
 			clntLen = sizeof(echoClntAddr);
 			/* Wait for a client to connect */
 			if((clntSock = accept(servSock, (struct sockaddr*)&echoClntAddr, &clntLen)) < 0)
+			{
+				logging(177,177,"accept failed","server");
 				DieWithError("accept() failed");
-			puts("client Accepted");
+			}else
+			{
+				logging(177,177,"accept done","server");
+				puts("client Accepted");
+			}
 
 			/* Create separate memory for client argument */
 			if ((threadArgs= (struct ThreadArgs*) malloc(sizeof(struct ThreadArgs))) == NULL)
@@ -1007,7 +1080,7 @@ void *server(void *arg)
 
 			/* clntSock is connected to a client! */
 			printf("Handling Client %s\n", inet_ntoa(echoClntAddr.sin_addr));
-			pthread_create(&pth,NULL,clientThread,(void*)threadArgs);
+				pthread_create(&pth,NULL,clientThread,(void*)threadArgs);
 			puts("client thread created");
 
 			if(stop_eth)
@@ -1023,6 +1096,8 @@ void *server(void *arg)
 void *clientThread(void *arg)
 {
 	int clntSock;
+
+	logging(177,177,"client thread created","clientThread");
 	pthread_detach(pthread_self());
 
 	clntSock = ((struct ThreadArgs*)arg)->clntSock;
@@ -1068,20 +1143,25 @@ void HandleTCPClient(int clntSocket)
 	struct resp_buff nyceStatusBuffer;
 	int statusBufferSize,resp_cmd;
 
-
-	echoBuffer = malloc(sizeof(struct cmd_buff) + 256);
-
 	puts("system data exchange ready");
 	/* Receive message from client */
 
+
+	echoBuffer = malloc(sizeof(struct cmd_buff) + 256);
+
 	resp_cmd = 0;
 	memset(echoBuffer,0,sizeof(struct cmd_buff) + 256);
+
+	logging(99,(float)resp_cmd,"initial recieving","HandleTCPClient");///////////////////logging
 	if((recvMsgSize = recv(clntSocket, echoBuffer, sizeof(struct cmd_buff) + 256, 0)) < 0)
 		DieWithError("recv() failed");
 
 	memcpy(&cmdBuffer,echoBuffer,sizeof(cmdBuffer));
 	handleBuffer(&cmdBuffer,&resp_cmd);
 
+	//pthread_mutex_lock(&lock);
+		NyceMainLoop();
+	//pthread_mutex_unlock(&lock);
 
 
 
@@ -1095,21 +1175,43 @@ void HandleTCPClient(int clntSocket)
 			prepareStatusBuffer(&nyceStatusBuffer,&statusBufferSize);
 			if(send(clntSocket, &nyceStatusBuffer, statusBufferSize, 0)  < 0)
 						DieWithError("send() failed");
+
+			if(!(resp_cmd == 17))
+			{
+				logging(99,(float)resp_cmd,"loop send","HandleTCPClient"); /////logging
+			}
+
 		}else
 		{
 			if(send(clntSocket, &resp_cmd, sizeof(resp_cmd), 0)  < 0)
 									DieWithError("send() failed");
 		}
 
+		//pthread_mutex_lock(&lock);
+			NyceMainLoop();
+		//pthread_mutex_unlock(&lock);
+
 
 		resp_cmd = 0;
 		memset(echoBuffer,0,sizeof(struct cmd_buff) + 256);
 		/* See if there is more data to receive */
+
+
 		if((recvMsgSize = recv(clntSocket, echoBuffer, sizeof(struct cmd_buff) + 256, 0)) < 0)
 			DieWithError("connection terminated");
 
 		memcpy(&cmdBuffer,echoBuffer,sizeof(cmdBuffer));
 		handleBuffer(echoBuffer,&resp_cmd);
+
+		NyceMainLoop();
+
+		if(!(resp_cmd == 17))
+		{
+			logging(99,(float)resp_cmd,"loop recieved","HandleTCPClient");/////////////////logging
+		}
+
+
+
 
 
 		if(stop_eth)
@@ -1124,8 +1226,10 @@ void HandleTCPClient(int clntSocket)
 
 int handleBuffer(void *arg, int* resp_cmd)
 {
+
+	//pthread_mutex_lock(&lock);
 	struct cmd_buff *buffer;
-	int count,retVar;
+	int retVar;
 	buffer = (struct cmd_buff *)arg;
 	int cmdFlg;
 
@@ -1205,16 +1309,92 @@ int handleBuffer(void *arg, int* resp_cmd)
 			else
 			{
 				retVar = -1;
+				//pthread_mutex_unlock(&lock);
 			}
 		break;
 
 	case 2:
 		*resp_cmd = buffer->cmd - (2 * 10000);
 		break;
+	case 3:
+		*resp_cmd = buffer->cmd - (3 * 10000);
+		buffer->cmd = *resp_cmd;
+
+		if(buffer->cmd == E_CMD_FLG)
+			{
+				memcpy(CMD_FLG,buffer->fbuff,buffer->size);
+			}
+			else if(buffer->cmd == E_CTR_FLG)
+			{
+				memcpy(CTR_FLG,buffer->fbuff,buffer->size);
+			}
+			else if(buffer->cmd == E_AXS_NAM0)
+			{
+				memcpy(AXS_NAM0,buffer->cbuff,buffer->size);
+			}
+			else if(buffer->cmd == E_AXS_NAM1)
+			{
+				memcpy(AXS_NAM1,buffer->cbuff,buffer->size);
+			}
+			else if(buffer->cmd == E_AXS_NAM2)
+			{
+				memcpy(AXS_NAM2,buffer->cbuff,buffer->size);
+			}
+			else if(buffer->cmd == E_AXS_NAM3)
+			{
+				memcpy(AXS_NAM3,buffer->cbuff,buffer->size);
+			}
+			else if(buffer->cmd == E_AXS_NAM4)
+			{
+				memcpy(AXS_NAM4,buffer->cbuff,buffer->size);
+			}
+			else if(buffer->cmd == E_AXS_NAM5)
+			{
+				memcpy(AXS_NAM5,buffer->cbuff,buffer->size);
+			}
+			else if(buffer->cmd == E_AXS_NAM6)
+			{
+				memcpy(AXS_NAM6,buffer->cbuff,buffer->size);
+			}
+			else if(buffer->cmd == E_AXS_NAM7)
+			{
+				memcpy(AXS_NAM7,buffer->cbuff,buffer->size);
+			}
+			else if(buffer->cmd == E_AXS_NAM8)
+			{
+				memcpy(AXS_NAM8,buffer->cbuff,buffer->size);
+			}
+			else if(buffer->cmd == E_AXS_NAM9)
+			{
+				memcpy(AXS_NAM9,buffer->cbuff,buffer->size);
+			}
+			else if(buffer->cmd == E_AXS_TYPE)
+			{
+				memcpy(AXS_TYPE,buffer->ibuff,buffer->size);
+			}
+			else if((buffer->cmd == E_FORCE_LIMIT) && pShmem_data)
+			{
+				memcpy(pShmem_data->FORCE_LIMIT,buffer->fbuff,buffer->size);
+			}
+			else if(buffer->cmd == E_NYCE_INIT)
+			{
+				sys_case = SYS_INIT;
+				puts("SYSTEM INIT");
+			}
+			else if(buffer->cmd == E_NYCE_STOP)
+			{
+				sys_case = SYS_STOP;
+				puts("SYSTEM STOP");
+			}
+			else
+			{
+				retVar = -1;
+				//pthread_mutex_unlock(&lock);
+			}
 	}
 
 
-
+	//pthread_mutex_unlock(&lock);
 	return retVar;
 }
 
@@ -1273,4 +1453,54 @@ void prepareStatusBuffer(void *statBuff, int* buffersize)
 
 		*buffersize = sizeof(struct resp_buff);
 
+}
+
+int initLogFile(void)
+{
+	debug = DEBUG;
+	char filename[50];
+	time_t t = time(NULL);
+	struct tm tm = *localtime(&t);
+
+	sprintf(filename,"/home/user/logging_%d_%d_%d_%d_%d.txt", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min);
+	if(debug)
+	{
+		logfile = fopen(filename, "a+");
+		if(logfile == NULL)
+		{
+			printf("Log open problem \n");
+			return -1;
+		}
+	}
+	return 1;
+}
+
+
+int logging(int axis,float payload,char* msg, char* retval)
+{
+
+char logmsg[180];
+time_t t = time(NULL);
+struct tm tm = *localtime(&t);
+
+if(debug)
+	{
+		sprintf(logmsg,"Axis :%d ,Payload : %.3f, Log Msg: %s, Return: %s",axis,payload,msg,retval);
+
+		if(strcmp(logmsg,oldlogmsg) != 0)
+		{
+			fprintf(logfile,"%d-%d-%d %d:%d:%d : %s \n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec,logmsg);
+			memcpy(oldlogmsg,logmsg,sizeof(logmsg));
+		}
+	}
+	return 1;
+}
+
+int closeLogFile(void)
+{
+	if(debug)
+	{
+		fclose(logfile);
+	}
+	return 1;
 }

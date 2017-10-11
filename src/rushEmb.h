@@ -269,4 +269,14 @@ typedef struct cmd_buff
 	char				cbuff[20];
 	int					ibuff[20];
 }CMD_BUFF;
+
+FILE *logfile;
+char oldlogmsg[180];
+
+int initLogFile(void);
+int logging(int axis,float payload,char* msg,char* retval);
+int closeLogFile(void);
+
+int debug;
+
 #endif
