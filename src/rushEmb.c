@@ -615,9 +615,9 @@ void NyceMainLoop(void)
 				pShmem_data->Shared_CtrFlag[ax + 60] = CTR_FLG[ax + 60];
 			}
 		}
+
+		waitforUDSX(resp_cmd);
 	}
-
-
 }
 
 int NyceDisconnectAxis(void)
@@ -1141,7 +1141,7 @@ void HandleTCPClient(int clntSocket)
 	struct cmd_buff cmdBuffer;
 	int recvMsgSize;             /* Size of received message */
 	struct resp_buff nyceStatusBuffer;
-	int statusBufferSize,resp_cmd;
+	int statusBufferSize,count;
 
 	puts("system data exchange ready");
 	/* Receive message from client */
@@ -1160,7 +1160,10 @@ void HandleTCPClient(int clntSocket)
 	handleBuffer(&cmdBuffer,&resp_cmd);
 
 	//pthread_mutex_lock(&lock);
+	for(count = 0;count < 1;count++)
+	{
 		NyceMainLoop();
+	}
 	//pthread_mutex_unlock(&lock);
 
 
@@ -1176,19 +1179,23 @@ void HandleTCPClient(int clntSocket)
 			if(send(clntSocket, &nyceStatusBuffer, statusBufferSize, 0)  < 0)
 						DieWithError("send() failed");
 
-			if(!(resp_cmd == 17))
+			if(!(resp_cmd == 16 || resp_cmd == 17))
 			{
 				logging(99,(float)resp_cmd,"loop send","HandleTCPClient"); /////logging
 			}
 
 		}else
 		{
+			resp_cmd = E_PING;
 			if(send(clntSocket, &resp_cmd, sizeof(resp_cmd), 0)  < 0)
 									DieWithError("send() failed");
 		}
 
 		//pthread_mutex_lock(&lock);
+		for(count = 0;count < 0;count++)
+		{
 			NyceMainLoop();
+		}
 		//pthread_mutex_unlock(&lock);
 
 
@@ -1203,15 +1210,15 @@ void HandleTCPClient(int clntSocket)
 		memcpy(&cmdBuffer,echoBuffer,sizeof(cmdBuffer));
 		handleBuffer(echoBuffer,&resp_cmd);
 
-		NyceMainLoop();
+		for(count = 0;count < 1;count++)
+		{
+			NyceMainLoop();
+		}
 
-		if(!(resp_cmd == 17))
+		if(!(resp_cmd == 16 ||resp_cmd == 17))
 		{
 			logging(99,(float)resp_cmd,"loop recieved","HandleTCPClient");/////////////////logging
 		}
-
-
-
 
 
 		if(stop_eth)
@@ -1502,5 +1509,23 @@ int closeLogFile(void)
 	{
 		fclose(logfile);
 	}
+	return 1;
+}
+
+int waitforUDSX(int active)
+{
+	if(pShmem_data)
+		{
+			if(active)
+			{
+				pShmem_data->udsx_enter = 0;
+				pShmem_data->udsx_exit = 0;
+				while(pShmem_data->udsx_enter == 0 || pShmem_data->udsx_exit == 0)
+				{
+					;
+				};
+			}
+		}
+
 	return 1;
 }

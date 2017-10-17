@@ -97,6 +97,8 @@ typedef struct shmem_data
 	float 				VC_POS[20];
 	float 				FORCE_LIMIT[10];
 	float 				NET_CURRENT[10];
+	int					udsx_enter;
+	int					udsx_exit;
 } SHMEM_DATA;
 
 
@@ -104,6 +106,8 @@ typedef struct shmem_data
 struct ThreadArgs {
 	int clntSock;
 };
+
+int resp_cmd;
 
 void DieWithError(char* errorMessage); /* Error handling function */
 void HandleTCPClient(int clntSocketc);   /* TCP client handling function */
@@ -116,6 +120,7 @@ void *clientThread(void *arg);
 void socketSetUp(int socket);
 void prepareStatusBuffer(void *statBuff, int* buffersize);
 int NyceDisconnectAxis(void);
+int waitforUDSX(int active);
 
 
 struct sockaddr_in echoServAddr; /* Local address */
