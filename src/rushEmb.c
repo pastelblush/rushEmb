@@ -36,6 +36,7 @@
 #include "sysapi.h"
 #include "udsxapi.h"
 #include <time.h>
+#include <errno.h>
 
 /////////tcp communication
 
@@ -1008,87 +1009,273 @@ void *server(void *arg)
 	char *str;
 	struct ThreadArgs *threadArgs;
 	int servSock,clntSock,true_val = 1;
-
-
-
+	
+	
 	str = (char *)arg;
 	printf("%s\n",str);
 
 	pthread_detach(pthread_self());
+	
+	
+	////////////////////////////Multiport Support////////////////////////////////////////
+	int i,j;
+	int addrlen,new_socket;
+	struct sockaddr_in address;
+	int opt = TRUE;
+	int max_sd,sd,activity;
+	
+	char* echoBuffer; /* Buffer for echo message */
+	struct cmd_buff cmdBuffer;
+	int recvMsgSize;             /* Size of received message */
+	struct resp_buff nyceStatusBuffer;
+	int statusBufferSize;
+	int pingCmd;
+	
+	
+	for (i = 0; i < max_clients; i++) 
+    {
+        client_socket[i] = 0;
+    }
+	
+	for(i=0; i < max_ports;i++)
+	{
+		ports[i] = 0;
+		master_socket[i] = 0;
+	}
+	
+	ports[0] = 6666;
+	ports[1] = 9999;
 
-
-		echoServPort = PORT;
-		/* Create socket for incoming connections */
-		if((servSock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
-		DieWithError("socket() failed");
-
-		/* Construct local address structure */
-		memset(&echoServAddr, 0, sizeof(echoServAddr));   /* Zero out structure */
-		echoServAddr.sin_family = AF_INET;                /* Internet address family */
-		echoServAddr.sin_addr.s_addr = htonl(INADDR_ANY); /* Any incoming interface */
-		echoServAddr.sin_port = htons(echoServPort);      /* Local port */
-
-		/* Bind to the local address */
-		setsockopt(servSock, SOL_SOCKET,SO_REUSEPORT, &true_val, sizeof(true_val));
-		if(bind(servSock, (struct sockaddr*)&echoServAddr, sizeof(echoServAddr)) < 0)
+	
+	//create a master socket
+	for(i = 0;i < max_ports;i++)
+	{
+		if(ports[i]!=0)
 		{
-			logging(177,177,"bind failed","server");
-			DieWithError("bind() failed");
-		}else
-		{
-			puts("bind done");
-			logging(177,177,"bind done","server");
-		}
-
-
-
-		/* Mark the socket so it will listen for incoming connections */
-		if(listen(servSock, MAXPENDING) < 0)
-		{
-			logging(177,177,"listen failed","server");
-			DieWithError("listen() failed");
-		}else
-		{
-			puts("listen done");
-			logging(177,177,"listen done","server");
-		}
-
-
-
-		//check buffer size
-
-		for(;;) /* Run forever */
-		{
-			/* Set the size of the in-out parameter */
-			clntLen = sizeof(echoClntAddr);
-			/* Wait for a client to connect */
-			if((clntSock = accept(servSock, (struct sockaddr*)&echoClntAddr, &clntLen)) < 0)
+			if( (master_socket[i] = socket(AF_INET , SOCK_STREAM , 0)) == 0) 
 			{
-				logging(177,177,"accept failed","server");
-				DieWithError("accept() failed");
-			}else
-			{
-				logging(177,177,"accept done","server");
-				puts("client Accepted");
+				perror("socket failed");
+				exit(EXIT_FAILURE);
 			}
-
-			/* Create separate memory for client argument */
-			if ((threadArgs= (struct ThreadArgs*) malloc(sizeof(struct ThreadArgs))) == NULL)
-				DieWithError("failed to create client handle");
-
-			threadArgs-> clntSock = clntSock;
-
-			/* clntSock is connected to a client! */
-			printf("Handling Client %s\n", inet_ntoa(echoClntAddr.sin_addr));
-				pthread_create(&pth,NULL,clientThread,(void*)threadArgs);
-			puts("client thread created");
-
-			if(stop_eth)
+			
+			//set master socket to allow multiple connections , this is just a good habit, it will work without this
+			if( setsockopt(master_socket[i], SOL_SOCKET, SO_REUSEADDR, (char *)&opt, sizeof(opt)) < 0 )
 			{
-				close(servSock);
-				break;
+				perror("setsockopt");
+				exit(EXIT_FAILURE);
+			}
+		  
+			//type of socket created
+			address.sin_family = AF_INET;
+			address.sin_addr.s_addr = INADDR_ANY;
+			address.sin_port = htons( ports[i] );
+			  
+			//bind the socket to localhost port 8888
+			if (bind(master_socket[i], (struct sockaddr *)&address, sizeof(address))<0) 
+			{
+				perror("bind failed");
+				exit(EXIT_FAILURE);
+			}
+			printf("Listener on port %d \n", ports[i]);
+			logging(177,ports[i],"Listener on port","server");
+			 
+			//try to specify maximum of 3 pending connections for the master socket
+			if (listen(master_socket[i], 3) < 0)
+			{
+				perror("listen");
+				exit(EXIT_FAILURE);
 			}
 		}
+	}
+	
+	//accept the incoming connection
+    addrlen = sizeof(address);
+    puts("Waiting for connections ...");
+	
+	
+	echoBuffer = malloc(sizeof(struct cmd_buff) + 256);
+	memset(echoBuffer,0,sizeof(struct cmd_buff) + 256);
+	resp_cmd = 0;
+	max_sd = 0;
+	
+	while(TRUE) 
+    {
+        //clear the socket set
+        FD_ZERO(&readfds);
+  
+        //add master socket to set
+		for(i = 0;i < max_ports;i++)
+		{
+			//socket descriptor
+			sd = master_socket[i];
+
+			//if valid socket descriptor then add to read list
+			if(sd > 0)
+				FD_SET( sd , &readfds);
+
+			//highest file descriptor number, need it for the select function
+			if(sd > max_sd)
+				max_sd = sd;
+		}
+         
+        //add child sockets to set
+        for ( i = 0 ; i < max_clients ; i++) 
+        {
+            //socket descriptor
+            sd = client_socket[i];
+             
+            //if valid socket descriptor then add to read list
+            if(sd > 0)
+                FD_SET( sd , &readfds);
+             
+            //highest file descriptor number, need it for the select function
+            if(sd > max_sd)
+                max_sd = sd;
+        }
+  
+        //wait for an activity on one of the sockets , timeout is NULL , so wait indefinitely
+        activity = select( max_sd + 1 , &readfds , NULL , NULL , NULL);
+    
+        if ((activity < 0) && (errno!=EINTR)) 
+        {
+            printf("select error");
+        }
+          
+		for(i=0;i<max_ports;i++)
+		{
+			if(master_socket[i] != 0)
+			{
+				//If something happened on the master socket , then its an incoming connection
+				if (FD_ISSET(master_socket[i], &readfds)) 
+				{
+					if ((new_socket = accept(master_socket[i], (struct sockaddr *)&address, (socklen_t*)&addrlen))<0)
+					{
+						perror("accept");
+						exit(EXIT_FAILURE);
+					}
+				  
+					//inform user of socket number - used in send and receive commands
+					printf("New connection , socket fd is %d , ip is : %s , port : %d \n" , new_socket , inet_ntoa(address.sin_addr) , ntohs(address.sin_port));
+					  
+					//add new socket to array of sockets
+					for (j = 0; j < max_clients; j++) 
+					{
+						//if position is empty
+						if( client_socket[j] == 0 )
+						{
+							client_socket[j] = new_socket;
+							server_port_list[j] = ports[i];
+							printf("Adding to list of sockets as %d\n" , i);
+							 
+							break;
+						}
+					}
+				}
+			}
+		}
+          
+		  
+        //else its some IO operation on some other socket :)
+        for (i = 0; i < max_clients; i++) 
+        {
+            sd = client_socket[i];
+              
+            if (FD_ISSET( sd , &readfds)) 
+            {
+                //Check if it was for closing , and also read the incoming message
+                if ((recvMsgSize = recv(sd, echoBuffer, sizeof(struct cmd_buff) + 256, 0)) == 0)
+                {
+                    //Somebody disconnected , get his details and print
+                    getpeername(sd , (struct sockaddr*)&address , (socklen_t*)&addrlen);
+                    printf("Host disconnected , ip %s , port %d \n" , inet_ntoa(address.sin_addr) , ntohs(address.sin_port));
+                      
+                    //Close the socket and mark as 0 in list for reuse
+                    close( sd );
+                    client_socket[i] = 0;
+                }
+                  
+                //Echo back the message that came in
+                else
+                {
+					memcpy(&cmdBuffer,echoBuffer,sizeof(cmdBuffer));
+					handleBuffer(&cmdBuffer,&resp_cmd);
+					
+					if(resp_cmd)
+					{
+						NyceMainLoop();
+						memset(&nyceStatusBuffer,0,sizeof(nyceStatusBuffer));
+						prepareStatusBuffer(&nyceStatusBuffer,&statusBufferSize);
+						if(send(sd, &nyceStatusBuffer, statusBufferSize, 0)  < 0)
+									DieWithError("send() failed");
+
+						if(!(resp_cmd == 16 || resp_cmd == 17))
+						{
+							logging(99,(float)resp_cmd,"loop send","HandleTCPClient"); /////logging
+						}
+
+					}
+					else
+					{
+						pingCmd = E_PING;
+						if(send(sd, &pingCmd, sizeof(pingCmd), 0)  < 0)
+							DieWithError("send() failed");
+					}
+                }
+            }
+        }
+		
+        if(!resp_cmd)
+        {
+        	//run nyce main loop
+        	NyceMainLoop();
+        	resp_cmd = 0;
+        }
+
+		if(stop_eth)
+		{
+			//close(servSock);
+			break;
+		}
+
+		usleep(200);
+    }
+	
+	
+	//////////////////////////////////////////////////////////////////////////////////////
+	
+
+//		for(;;) /* Run forever */
+//		{
+//			/* Set the size of the in-out parameter */
+//			clntLen = sizeof(echoClntAddr);
+//			/* Wait for a client to connect */
+//			if((clntSock = accept(servSock, (struct sockaddr*)&echoClntAddr, &clntLen)) < 0)
+//			{
+//				logging(177,177,"accept failed","server");
+//				DieWithError("accept() failed");
+//			}else
+//			{
+//				logging(177,177,"accept done","server");
+//				puts("client Accepted");
+//			}
+//
+//			/* Create separate memory for client argument */
+//			if ((threadArgs= (struct ThreadArgs*) malloc(sizeof(struct ThreadArgs))) == NULL)
+//				DieWithError("failed to create client handle");
+//
+//			threadArgs-> clntSock = clntSock;
+//
+//			/* clntSock is connected to a client! */
+//			printf("Handling Client %s\n", inet_ntoa(echoClntAddr.sin_addr));
+//				pthread_create(&pth,NULL,clientThread,(void*)threadArgs);
+//			puts("client thread created");
+//
+//			if(stop_eth)
+//			{
+//				close(servSock);
+//				break;
+//			}
+//		}
 	return 0;
     /* NOT REACHED */
 }

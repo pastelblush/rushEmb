@@ -284,4 +284,16 @@ int closeLogFile(void);
 
 int debug;
 
+
+#define max_ports 10
+#define max_clients 20
+
+
+int master_socket[max_ports];
+int client_socket[max_clients];
+int server_port_list[max_clients];
+int ports[max_ports];
+fd_set readfds;
+
+
 #endif
