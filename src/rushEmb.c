@@ -143,7 +143,7 @@ int main(void)
     	printf("NyceInit Error %s\n", NyceGetStatusString(retVal));
     	return 0;
     }
-    logging(100,0,"Init NyceInit",NyceGetStatusString(retVal)); ///// log
+      logging(100,0,"Init NyceInit",NyceGetStatusString(retVal)); ///// log
 
 
 
@@ -614,6 +614,8 @@ void NyceMainLoop(void)
 				pShmem_data->Shared_CtrFlag[ax + 10] = CTR_FLG[ax + 10];
 				pShmem_data->Shared_CtrFlag[ax + 50] = CTR_FLG[ax + 50];
 				pShmem_data->Shared_CtrFlag[ax + 60] = CTR_FLG[ax + 60];
+
+				pShmem_data->FORCE_LIMIT[ax] = FORCE_LIMIT[ax];
 			}
 		}
 
@@ -1004,12 +1006,27 @@ void StartUdsx(NHI_NODE nodeId, const char* udsxFilePath)
     }
 }
 
+/* binary search in memory */
+int memsearch(const char *hay, int haysize, const char *needle, int needlesize) {
+    int haypos, needlepos;
+    haysize -= needlesize;
+    for (haypos = 0; haypos <= haysize; haypos++) {
+        for (needlepos = 0; needlepos < needlesize; needlepos++) {
+            if (hay[haypos + needlepos] != needle[needlepos]) {
+                // Next character in haystack.
+                break;
+            }
+        }
+        if (needlepos == needlesize) {
+            return haypos;
+        }
+    }
+    return -1;
+}
+
 void *server(void *arg)
 {
 	char *str;
-	struct ThreadArgs *threadArgs;
-	int servSock,clntSock,true_val = 1;
-	
 	
 	str = (char *)arg;
 	printf("%s\n",str);
@@ -1025,16 +1042,22 @@ void *server(void *arg)
 	int max_sd,sd,activity;
 	
 	char* echoBuffer; /* Buffer for echo message */
+	char* rawechoBuffer;
 	struct cmd_buff cmdBuffer;
 	int recvMsgSize;             /* Size of received message */
 	struct resp_buff nyceStatusBuffer;
 	int statusBufferSize;
 	int pingCmd;
+	char ikey,rw_key;
+	float fkey;
+	char ckey;
+	int pch,size;
 	
-	
+
 	for (i = 0; i < max_clients; i++) 
     {
         client_socket[i] = 0;
+        server_port_list[i] = 0;
     }
 	
 	for(i=0; i < max_ports;i++)
@@ -1043,10 +1066,12 @@ void *server(void *arg)
 		master_socket[i] = 0;
 	}
 	
-	ports[0] = 6666;
-	ports[1] = 9999;
-
+	for(i=0; i < 5;i++)
+	{
+		ports[i] = 6000 + i;
+ 	}
 	
+
 	//create a master socket
 	for(i = 0;i < max_ports;i++)
 	{
@@ -1093,8 +1118,9 @@ void *server(void *arg)
     puts("Waiting for connections ...");
 	
 	
-	echoBuffer = malloc(sizeof(struct cmd_buff) + 256);
-	memset(echoBuffer,0,sizeof(struct cmd_buff) + 256);
+	echoBuffer = (char*)malloc(1000);
+	rawechoBuffer = (char*)malloc(1024);
+	memset(echoBuffer,0,1024);
 	resp_cmd = 0;
 	max_sd = 0;
 	
@@ -1182,8 +1208,9 @@ void *server(void *arg)
               
             if (FD_ISSET( sd , &readfds)) 
             {
+
                 //Check if it was for closing , and also read the incoming message
-                if ((recvMsgSize = recv(sd, echoBuffer, sizeof(struct cmd_buff) + 256, 0)) == 0)
+                if ((recvMsgSize = recv(sd, rawechoBuffer, 1024, 0)) == 0)
                 {
                     //Somebody disconnected , get his details and print
                     getpeername(sd , (struct sockaddr*)&address , (socklen_t*)&addrlen);
@@ -1193,12 +1220,173 @@ void *server(void *arg)
                     close( sd );
                     client_socket[i] = 0;
                 }
-                  
+
                 //Echo back the message that came in
                 else
                 {
-					memcpy(&cmdBuffer,echoBuffer,sizeof(cmdBuffer));
-					handleBuffer(&cmdBuffer,&resp_cmd);
+					logging(99,(float)(server_port_list[i] - 6000),"loop recv","HandleTCPClient"); /////logging
+
+					pch = memsearch(rawechoBuffer,1024,"GisG",strlen("GisG"));
+					if(pch>=0)
+					{
+						pch = pch + strlen("GisG");
+						memcpy(echoBuffer,rawechoBuffer + pch,1000);
+					}
+
+                	switch(server_port_list[i] - 6000)
+					{
+						case char_10:
+						memcpy(&ckey,echoBuffer,sizeof(ckey));
+						rw_key = ckey/100;
+						ikey = ckey;
+						switch(rw_key)
+						{
+							case 1:
+								resp_cmd = ikey - (1 * 100);
+							break;
+							case 2:
+								ikey = resp_cmd = ikey - (2 * 100);
+							default:
+							
+								switch(ikey)
+								{
+									case E_AXS_NAM0:
+									memcpy(AXS_NAM0,echoBuffer + sizeof(char),sizeof(AXS_NAM0));
+									break;
+									case E_AXS_NAM1:
+									memcpy(AXS_NAM1,echoBuffer + sizeof(char),sizeof(AXS_NAM1));
+									break;
+									case E_AXS_NAM2:
+									memcpy(AXS_NAM2,echoBuffer + sizeof(char),sizeof(AXS_NAM2));
+									break;
+									case E_AXS_NAM3:
+									memcpy(AXS_NAM3,echoBuffer + sizeof(char),sizeof(AXS_NAM3));
+									break;
+									case E_AXS_NAM4:
+									memcpy(AXS_NAM4,echoBuffer + sizeof(char),sizeof(AXS_NAM4));
+									break;
+									case E_AXS_NAM5:
+									memcpy(AXS_NAM5,echoBuffer + sizeof(char),sizeof(AXS_NAM5));
+									break;
+									case E_AXS_NAM6:
+									memcpy(AXS_NAM6,echoBuffer + sizeof(char),sizeof(AXS_NAM6));
+									break;
+									case E_AXS_NAM7:
+									memcpy(AXS_NAM7,echoBuffer + sizeof(char),sizeof(AXS_NAM7));
+									break;
+									case E_AXS_NAM8:
+									memcpy(AXS_NAM8,echoBuffer + sizeof(char),sizeof(AXS_NAM8));
+									break;
+									case E_AXS_NAM9:
+									memcpy(AXS_NAM9,echoBuffer + sizeof(char),sizeof(AXS_NAM9));
+									break;
+								}
+								break;
+						}
+						break;
+						
+						case float_10:
+							memcpy(&ckey,echoBuffer,sizeof(ckey));
+							rw_key = ckey/100;
+							ikey = ckey;
+							switch(rw_key)
+							{
+								case 1:
+									resp_cmd = ikey - (1 * 100);
+								break;
+								case 2:
+									ikey = resp_cmd = ikey - (2 * 100);
+								default:
+									switch(ikey)
+									{
+										case E_CMD_FLG:
+										memcpy(CMD_FLG,echoBuffer + 1,sizeof(CMD_FLG));
+										break;
+										case E_FORCE_LIMIT:
+										memcpy(FORCE_LIMIT,echoBuffer + 1,sizeof(FORCE_LIMIT));
+										break;
+									}
+								break;
+							}
+						
+						break;
+						
+						case float_80:
+						memcpy(&ckey,echoBuffer,sizeof(ckey));
+						rw_key = ckey/100;
+						ikey = ckey;
+							switch(rw_key)
+							{
+								case 1:
+									resp_cmd = ikey - (1 * 100);
+								break;
+								case 2:
+									ikey = resp_cmd = ikey - (2 * 100);
+								default:
+									switch(ikey)
+									{
+										case E_CTR_FLG:
+										memcpy(CTR_FLG,echoBuffer + 1,sizeof(CTR_FLG));
+										break;
+									}
+								break;
+							}
+						
+						break;
+						
+						case int_1:
+						memcpy(&ckey,echoBuffer,sizeof(ckey));
+						rw_key = ckey/100;
+						ikey = ckey;
+							switch(rw_key)
+							{
+								case 1:
+									resp_cmd = ikey - (1 * 100);
+								break;
+								case 2:
+									ikey = resp_cmd = ikey - (2 * 100);
+								default:
+									switch(ikey)
+									{
+										case E_NYCE_INIT:
+										sys_case = SYS_INIT;
+										break;
+										case E_NYCE_STOP:
+										sys_case = SYS_STOP;
+										break;
+									}
+								break;
+							}
+						
+						break;
+						
+						case int_10:
+						memcpy(&ckey,echoBuffer,sizeof(ckey));
+						rw_key = ckey/100;
+						ikey = ckey;
+							switch(rw_key)
+							{
+								case 1:
+									resp_cmd = ikey - (1 * 100);
+								break;
+								case 2:
+									ikey = resp_cmd = ikey - (2 * 100);
+								default:
+									switch(ikey)
+									{
+										case E_AXS_TYPE:
+										memcpy(AXS_TYPE,echoBuffer + 1,sizeof(AXS_TYPE));
+										break;
+										case E_STAT_FLG:
+										memcpy(&pShmem_data->STAT_FLG,echoBuffer + 1,sizeof(pShmem_data->STAT_FLG));
+										break;
+									}
+								break;
+							}
+						
+						break;
+						
+					}
 					
 					if(resp_cmd)
 					{
@@ -1208,7 +1396,7 @@ void *server(void *arg)
 						if(send(sd, &nyceStatusBuffer, statusBufferSize, 0)  < 0)
 									DieWithError("send() failed");
 
-						if(!(resp_cmd == 16 || resp_cmd == 17))
+						if(!(resp_cmd == E_STAT_FLG || resp_cmd == E_VC_POS))
 						{
 							logging(99,(float)resp_cmd,"loop send","HandleTCPClient"); /////logging
 						}
@@ -1216,7 +1404,7 @@ void *server(void *arg)
 					}
 					else
 					{
-						pingCmd = E_PING;
+						pingCmd = server_port_list[i] - 6000; // gave back cmd
 						if(send(sd, &pingCmd, sizeof(pingCmd), 0)  < 0)
 							DieWithError("send() failed");
 					}
@@ -1239,61 +1427,11 @@ void *server(void *arg)
 
 		usleep(200);
     }
-	
-	
+
 	//////////////////////////////////////////////////////////////////////////////////////
 	
-
-//		for(;;) /* Run forever */
-//		{
-//			/* Set the size of the in-out parameter */
-//			clntLen = sizeof(echoClntAddr);
-//			/* Wait for a client to connect */
-//			if((clntSock = accept(servSock, (struct sockaddr*)&echoClntAddr, &clntLen)) < 0)
-//			{
-//				logging(177,177,"accept failed","server");
-//				DieWithError("accept() failed");
-//			}else
-//			{
-//				logging(177,177,"accept done","server");
-//				puts("client Accepted");
-//			}
-//
-//			/* Create separate memory for client argument */
-//			if ((threadArgs= (struct ThreadArgs*) malloc(sizeof(struct ThreadArgs))) == NULL)
-//				DieWithError("failed to create client handle");
-//
-//			threadArgs-> clntSock = clntSock;
-//
-//			/* clntSock is connected to a client! */
-//			printf("Handling Client %s\n", inet_ntoa(echoClntAddr.sin_addr));
-//				pthread_create(&pth,NULL,clientThread,(void*)threadArgs);
-//			puts("client thread created");
-//
-//			if(stop_eth)
-//			{
-//				close(servSock);
-//				break;
-//			}
-//		}
 	return 0;
     /* NOT REACHED */
-}
-
-void *clientThread(void *arg)
-{
-	int clntSock;
-
-	logging(177,177,"client thread created","clientThread");
-	pthread_detach(pthread_self());
-
-	clntSock = ((struct ThreadArgs*)arg)->clntSock;
-	free(arg);
-
-	socketSetUp(clntSock);
-	HandleTCPClient(clntSock);
-
-	return NULL;
 }
 
 void socketSetUp(int socket)
@@ -1322,283 +1460,11 @@ void socketSetUp(int socket)
 		setsockopt(socket, IPPROTO_TCP,SO_KEEPALIVE, (void *)&true_val, sizeof(true_val));
 }
 
-void HandleTCPClient(int clntSocket)
-{
-	char* echoBuffer; /* Buffer for echo message */
-	struct cmd_buff cmdBuffer;
-	int recvMsgSize;             /* Size of received message */
-	struct resp_buff nyceStatusBuffer;
-	int statusBufferSize,count;
-
-	puts("system data exchange ready");
-	/* Receive message from client */
-
-
-	echoBuffer = malloc(sizeof(struct cmd_buff) + 256);
-
-	resp_cmd = 0;
-	memset(echoBuffer,0,sizeof(struct cmd_buff) + 256);
-
-	logging(99,(float)resp_cmd,"initial recieving","HandleTCPClient");///////////////////logging
-	if((recvMsgSize = recv(clntSocket, echoBuffer, sizeof(struct cmd_buff) + 256, 0)) < 0)
-		DieWithError("recv() failed");
-
-	memcpy(&cmdBuffer,echoBuffer,sizeof(cmdBuffer));
-	handleBuffer(&cmdBuffer,&resp_cmd);
-
-	//pthread_mutex_lock(&lock);
-	for(count = 0;count < 1;count++)
-	{
-		NyceMainLoop();
-	}
-	//pthread_mutex_unlock(&lock);
-
-
-
-	/* Send received string and receive again until end of transmission */
-	while(recvMsgSize > 0) /* zero indicates end of transmission */
-	{
-
-
-		if(resp_cmd){
-			memset(&nyceStatusBuffer,0,sizeof(nyceStatusBuffer));
-			prepareStatusBuffer(&nyceStatusBuffer,&statusBufferSize);
-			if(send(clntSocket, &nyceStatusBuffer, statusBufferSize, 0)  < 0)
-						DieWithError("send() failed");
-
-			if(!(resp_cmd == 16 || resp_cmd == 17))
-			{
-				logging(99,(float)resp_cmd,"loop send","HandleTCPClient"); /////logging
-			}
-
-		}else
-		{
-			resp_cmd = E_PING;
-			if(send(clntSocket, &resp_cmd, sizeof(resp_cmd), 0)  < 0)
-									DieWithError("send() failed");
-		}
-
-		//pthread_mutex_lock(&lock);
-		for(count = 0;count < 0;count++)
-		{
-			NyceMainLoop();
-		}
-		//pthread_mutex_unlock(&lock);
-
-
-		resp_cmd = 0;
-		memset(echoBuffer,0,sizeof(struct cmd_buff) + 256);
-		/* See if there is more data to receive */
-
-
-		if((recvMsgSize = recv(clntSocket, echoBuffer, sizeof(struct cmd_buff) + 256, 0)) < 0)
-			DieWithError("connection terminated");
-
-		memcpy(&cmdBuffer,echoBuffer,sizeof(cmdBuffer));
-		handleBuffer(echoBuffer,&resp_cmd);
-
-		for(count = 0;count < 1;count++)
-		{
-			NyceMainLoop();
-		}
-
-		if(!(resp_cmd == 16 ||resp_cmd == 17))
-		{
-			logging(99,(float)resp_cmd,"loop recieved","HandleTCPClient");/////////////////logging
-		}
-
-
-		if(stop_eth)
-		{
-			close(clntSocket); // if close event happened
-			break;
-		}
-	}
-	close(clntSocket); /* Close client socket */
-	printf("client socket close \n");
-}
-
-int handleBuffer(void *arg, int* resp_cmd)
-{
-
-	//pthread_mutex_lock(&lock);
-	struct cmd_buff *buffer;
-	int retVar;
-	buffer = (struct cmd_buff *)arg;
-	int cmdFlg;
-
-	retVar = 0;
-
-	cmdFlg = buffer->cmd/10000;
-	*resp_cmd = 0;
-
-	switch(cmdFlg){
-	default:
-		if(buffer->cmd == E_CMD_FLG)
-			{
-				memcpy(CMD_FLG,buffer->fbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_CTR_FLG)
-			{
-				memcpy(CTR_FLG,buffer->fbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM0)
-			{
-				memcpy(AXS_NAM0,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM1)
-			{
-				memcpy(AXS_NAM1,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM2)
-			{
-				memcpy(AXS_NAM2,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM3)
-			{
-				memcpy(AXS_NAM3,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM4)
-			{
-				memcpy(AXS_NAM4,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM5)
-			{
-				memcpy(AXS_NAM5,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM6)
-			{
-				memcpy(AXS_NAM6,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM7)
-			{
-				memcpy(AXS_NAM7,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM8)
-			{
-				memcpy(AXS_NAM8,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM9)
-			{
-				memcpy(AXS_NAM9,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_TYPE)
-			{
-				memcpy(AXS_TYPE,buffer->ibuff,buffer->size);
-			}
-			else if((buffer->cmd == E_FORCE_LIMIT) && pShmem_data)
-			{
-				memcpy(pShmem_data->FORCE_LIMIT,buffer->fbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_NYCE_INIT)
-			{
-				sys_case = SYS_INIT;
-				puts("SYSTEM INIT");
-			}
-			else if(buffer->cmd == E_NYCE_STOP)
-			{
-				sys_case = SYS_STOP;
-				puts("SYSTEM STOP");
-			}
-			else
-			{
-				retVar = -1;
-				//pthread_mutex_unlock(&lock);
-			}
-		break;
-
-	case 2:
-		*resp_cmd = buffer->cmd - (2 * 10000);
-		break;
-	case 3:
-		*resp_cmd = buffer->cmd - (3 * 10000);
-		buffer->cmd = *resp_cmd;
-
-		if(buffer->cmd == E_CMD_FLG)
-			{
-				memcpy(CMD_FLG,buffer->fbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_CTR_FLG)
-			{
-				memcpy(CTR_FLG,buffer->fbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM0)
-			{
-				memcpy(AXS_NAM0,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM1)
-			{
-				memcpy(AXS_NAM1,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM2)
-			{
-				memcpy(AXS_NAM2,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM3)
-			{
-				memcpy(AXS_NAM3,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM4)
-			{
-				memcpy(AXS_NAM4,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM5)
-			{
-				memcpy(AXS_NAM5,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM6)
-			{
-				memcpy(AXS_NAM6,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM7)
-			{
-				memcpy(AXS_NAM7,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM8)
-			{
-				memcpy(AXS_NAM8,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM9)
-			{
-				memcpy(AXS_NAM9,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_TYPE)
-			{
-				memcpy(AXS_TYPE,buffer->ibuff,buffer->size);
-			}
-			else if((buffer->cmd == E_FORCE_LIMIT) && pShmem_data)
-			{
-				memcpy(pShmem_data->FORCE_LIMIT,buffer->fbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_NYCE_INIT)
-			{
-				sys_case = SYS_INIT;
-				puts("SYSTEM INIT");
-			}
-			else if(buffer->cmd == E_NYCE_STOP)
-			{
-				sys_case = SYS_STOP;
-				puts("SYSTEM STOP");
-			}
-			else
-			{
-				retVar = -1;
-				//pthread_mutex_unlock(&lock);
-			}
-	}
-
-
-	//pthread_mutex_unlock(&lock);
-	return retVar;
-}
-
-
 
 
 void DieWithError(char* errorMessage)
 {
 	printf("%s \n",errorMessage);
-	//exit(1);
 }
 
 

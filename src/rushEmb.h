@@ -101,7 +101,7 @@ typedef struct shmem_data
 	int					udsx_exit;
 } SHMEM_DATA;
 
-
+float 				FORCE_LIMIT[10];
 
 struct ThreadArgs {
 	int clntSock;
@@ -149,6 +149,7 @@ enum{
 	E_AXS_NAM9,
 	E_AXS_TYPE,
 
+
 	E_FORCE_LIMIT,
 	E_NET_CURRENT,
 	E_STAT_FLG,
@@ -157,9 +158,34 @@ enum{
 	E_NYCE_INIT,
 	E_NYCE_STOP,
 
-	E_PING = 4114,
+	E_PING,
 
 };
+
+enum{
+	int_1,
+	int_10,
+	char_10,
+	float_10,
+	float_80,
+};
+
+//enum{
+//	R_READ_CMD = 100,
+//	R_CMD_FLG,
+//	R_CTR_FLG,
+//	R_FORCE_LIMIT,
+//	R_NET_CURRENT,
+//	R_STAT_FLG,
+//	R_VC_POS,
+//	R_NYCE_INIT,
+//	R_NYCE_STOP,
+//};
+//
+//enum{
+//	RW_READ_WRITE_CMD = 200,
+//	RW_CMD_FLG,
+//};
 
 
 #define MAXPENDING 5                   /* Maximum outstanding connection requests */
@@ -285,8 +311,8 @@ int closeLogFile(void);
 int debug;
 
 
-#define max_ports 10
-#define max_clients 20
+#define max_ports 15
+#define max_clients 15
 
 
 int master_socket[max_ports];
