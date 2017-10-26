@@ -46,6 +46,8 @@
 
 /* Include MY_UDSX_ARGS type and USR error codes */
 #include "rushEmb.h"
+#include <stdlib.h>
+#include <signal.h>
 
 
 
@@ -62,9 +64,7 @@
 #define USR_ERR_FAILED_TO_CREATE_SHM        ((NYCE_STATUS)((NYCE_ERROR_MASK)|((N4K_SS_USR<<NYCE_SUBSYS_SHIFT)|0)))
 #define USR_ERR_FAILED_TO_RESIZE_SHM        ((NYCE_STATUS)((NYCE_ERROR_MASK)|((N4K_SS_USR<<NYCE_SUBSYS_SHIFT)|1)))
 #define USR_ERR_FAILED_TO_MAP_SHM           ((NYCE_STATUS)((NYCE_ERROR_MASK)|((N4K_SS_USR<<NYCE_SUBSYS_SHIFT)|2)))
-#if defined(SO)
 #define USR_ERR_NOT_INITIALIZED             ((NYCE_STATUS)((NYCE_ERROR_MASK)|((N4K_SS_USR<<NYCE_SUBSYS_SHIFT)|3)))
-#endif
 
 /*
  * Administration of the shared memory.
@@ -86,9 +86,6 @@ static NYCE_STATUS Initialize(BOOL create);
  */
 static void Terminate(void);
 
-//////start UDSX
-void StartUdsx(NHI_NODE nodeId, const char* udsxFilePath);
-
 
 //nyce node
 NHI_NODE    nodeId;
@@ -96,12 +93,10 @@ NHI_NODE    nodeId;
 //mutex
 pthread_mutex_t lock;
 
-#if defined(BIN)
-#include <stdio.h>
-#include <stdlib.h>
-#include <signal.h>
-
 volatile sig_atomic_t g_stop;
+
+int sys_case;
+char logstr[80];
 
 /**
  *  @brief  Interrupt signal handler for catching Ctrl-C
@@ -116,8 +111,7 @@ void IntHandler(int signum)
     g_stop = 1;
 }
 
-int sys_case;
-char logstr[80];
+
 
 int main(void)
 {
@@ -392,8 +386,6 @@ void AxisInit(void)
 
 			if (StatusSConnect[ax] == 0)
 			{
-				//SacAlignMotor(sacAxis[ax]);
-				//SacSynchronize(sacAxis[ax], SAC_REQ_ALIGN_MOTOR, 5.0);
 				SacConnected[ax] = 255;
 				logging(ax,(float)SacConnected[ax],"From 144 : SacConnect","sac Connected");  ////////////////log
 			}
@@ -750,101 +742,12 @@ void ExeParabolicProfile(int AxisID)
 void EndForceUDSX(void)
 {
 	NYCE_STATUS return_stat;
-	char return_filename[50];
-
-	BOOL udsxRun;
-
 	Terminate();
-	//printf("Stopping node id is: %d \n",nodeId);
-    //NhiUdsxGetInfo(nodeId, &udsxRun, return_filename, NYCE_MAX_PATH_LENGTH);
-    //if(udsxRun)
-    //{
-    	return_stat = NhiUdsxStop(nodeId);
 
-    	logging(1,(float)return_stat,"NhiUdsxStop","EndForceUDSX");  ////////////////log
-    	//printf("UDSX Stop Stat : %s \n",NyceGetStatusString(return_stat));
-    //}
-    //else
-    //{
-    	//printf("No UDSX Running\n");
-    //}
- }
-#endif
+    return_stat = NhiUdsxStop(nodeId);
+    logging(1,(float)return_stat,"NhiUdsxStop","EndForceUDSX");  ////////////////log
 
-#if defined(SO)
-#include <udsxapi.h>
-
-NYCE_STATUS g_retVal = USR_ERR_NOT_INITIALIZED;
-
-NYCE_STATUS UdsxInitialize(const void* argument, uint32_t argumentSize)
-{
-    /*
-     * Because the creation of the shared memory causes a switch from the Xenomai domain
-     * to the linux domain, the creation of the shared memory must be performed from
-     * within the linux domain. The loading of the shared object is performed within the
-     * linux domain. Here we can only return the result of that function execution.
-     */
-    UNUSED(argument);
-    UNUSED(argumentSize);
-
-    return g_retVal;
 }
-
-void UdsxExecuteAtSampleStart(void)
-{
-    /*
-     * The UdsxExecuteAtSampleStart is not needed for this example,
-     * but an empty function is used to prevent a warning from NhiUdsxStart.
-     */
-}
-
-void UdsxExecuteAtSampleEnd(void)
-{
-    /*
-     * Check whether the shared memory is actually available.
-     */
-    if (pShmem_data)
-    {
-        /*
-         * Increase the counter.
-         */
-        (pShmem_data->Shared_StatFlag[0])++;
-    }
-}
-
-void UdsxTerminate(void)
-{
-    /*
-     * Termination of the shared memory must be performed in linux domain.
-     * Within Xenomai domain no termination is needed within this example.
-     */
-}
-
-/**
- *  @brief  On load function that is executed when the shared object is loaded
- *
- *  Because of the constructor attribute that is set for this function, this
- *  function is executed when the shared object is loaded, which is done within
- *  the linux domain.
- */
-__attribute__((constructor)) void OnLoad(void)
-{
-    g_retVal = Initialize(TRUE);
-}
-
-/**
- *  @brief  On unload function that is executed when the shared object is unloaded
- *
- *  Because of the destructor attribute that is set for this function, this
- *  function is executed when the shared object is unloaded, which is done within
- *  the linux domain.
- */
-__attribute__((destructor)) void OnUnload(void)
-{
-    Terminate();
-}
-
-#endif
 
 static NYCE_STATUS Initialize(BOOL create)
 {
@@ -929,45 +832,6 @@ static void Terminate(void)
              * Finally, the file that was created must be removed.
              */
             (void)shm_unlink(SHM_NAME);
-        }
-    }
-}
-
-void StartUdsx(NHI_NODE nodeId, const char* udsxFilePath)
-{
-    NYCE_STATUS     retVal;
-    MY_UDSX_ARGS    udsxArgs;
-
-    /* Let the UDSX check analog input 0 of the drive module in slot 0 */
-    udsxArgs.anInputvarId = NHI_VAR_AN_IN0_VALUE_SLOT0;
-    udsxArgs.anInErrorThreshold   = 2.5;
-    udsxArgs.anInWarningThreshold = 5.0;
-
-    retVal = NhiUdsxStart(nodeId, udsxFilePath , &udsxArgs, (uint32_t)sizeof(udsxArgs));
-
-    if (retVal == NYCE_OK)
-    {
-        printf("UDSX started successfully.\n");
-    }
-    else
-    {
-        /* Check for USR errors/warnings (see my_udsx.h) */
-        switch (retVal)
-        {
-            case MY_UDSX_ERR_INVALID_ARG:
-                printf("ERROR: UDSX not started: invalid argument.\n");
-                break;
-
-            case MY_UDSX_ERR_AN_IN_LEVEL_TOO_LOW:
-                printf("ERROR: UDSX not started: analog input too low.\n");
-                break;
-
-            case MY_UDSX_WRN_AN_IN_LEVEL_LOW:
-                printf("WARNING: UDSX running, but analog input is lower than %gV.\n", udsxArgs.anInWarningThreshold);
-                break;
-
-            default:
-                printf("Failed to start UDSX: %s\n", NyceGetStatusString(retVal));  /* Assume retVal is an error */
         }
     }
 }
@@ -1216,13 +1080,22 @@ void *server(void *arg)
 
 		if(stop_eth)
 		{
-			//close(servSock);
+			for(i = 0;i < max_ports;i++)
+			{
+				close(master_socket[i]);
+			}
+
+			for(i = 0;i < max_clients;i++)
+			{
+				close(client_socket[i]);
+			}
 			break;
 		}
 
 		usleep(200);
     }
 	
+	////////////////////////////Multiport Support////////////////////////////////////////
 	
 	return 0;
     /* NOT REACHED */
@@ -1247,145 +1120,6 @@ int memsearch(const char *hay, int haysize, const char *needle, int needlesize) 
     return -1;
 }
 
-
-void *clientThread(void *arg)
-{
-	int clntSock;
-
-	logging(177,177,"client thread created","clientThread");
-	pthread_detach(pthread_self());
-
-	clntSock = ((struct ThreadArgs*)arg)->clntSock;
-	free(arg);
-
-	socketSetUp(clntSock);
-	HandleTCPClient(clntSock);
-
-	return NULL;
-}
-
-void socketSetUp(int socket)
-{
-		unsigned int recvBuffSize;
-		unsigned int sockOptSize;
-		struct timeval tv;
-		int true_val = 1;
-
-		//check buffer size
-		sockOptSize= sizeof(recvBuffSize);
-		if(getsockopt(socket,SOL_SOCKET,SO_RCVBUF,&recvBuffSize,&sockOptSize) < 0)
-			DieWithError("getsockopt() failed");
-
-		printf("InitialReceive Buffer Size: %d\n", recvBuffSize);
-
-		recvBuffSize = MAX_BUFFER_SIZE * 20;
-		/* Set the buffer size to new value */
-		if (setsockopt(socket, SOL_SOCKET, SO_RCVBUF, &recvBuffSize, sizeof(recvBuffSize)) < 0)
-			DieWithError("setsockopt() failed");
-
-
-		tv.tv_sec = 3000;  /* 3 Secs Timeout */
-		setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
-		setsockopt(socket, SOL_SOCKET, SO_SNDTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
-		setsockopt(socket, IPPROTO_TCP,SO_KEEPALIVE, (void *)&true_val, sizeof(true_val));
-}
-
-void HandleTCPClient(int clntSocket)
-{
-	char* echoBuffer; /* Buffer for echo message */
-	struct cmd_buff cmdBuffer;
-	int recvMsgSize;             /* Size of received message */
-	struct resp_buff nyceStatusBuffer;
-	int statusBufferSize,count;
-
-	puts("system data exchange ready");
-	/* Receive message from client */
-
-
-	echoBuffer = malloc(sizeof(struct cmd_buff) + 256);
-
-	resp_cmd = 0;
-	memset(echoBuffer,0,sizeof(struct cmd_buff) + 256);
-
-	logging(99,(float)resp_cmd,"initial recieving","HandleTCPClient");///////////////////logging
-	if((recvMsgSize = recv(clntSocket, echoBuffer, sizeof(struct cmd_buff) + 256, 0)) < 0)
-		DieWithError("recv() failed");
-
-	memcpy(&cmdBuffer,echoBuffer,sizeof(cmdBuffer));
-	handleBuffer(&cmdBuffer,&resp_cmd);
-
-	//pthread_mutex_lock(&lock);
-	for(count = 0;count < 1;count++)
-	{
-		NyceMainLoop();
-	}
-	//pthread_mutex_unlock(&lock);
-
-
-
-	/* Send received string and receive again until end of transmission */
-	while(recvMsgSize > 0) /* zero indicates end of transmission */
-	{
-
-
-		if(resp_cmd){
-			memset(&nyceStatusBuffer,0,sizeof(nyceStatusBuffer));
-			prepareStatusBuffer(&nyceStatusBuffer,&statusBufferSize);
-			if(send(clntSocket, &nyceStatusBuffer, statusBufferSize, 0)  < 0)
-						DieWithError("send() failed");
-
-			if(!(resp_cmd == 16 || resp_cmd == 17))
-			{
-				logging(99,(float)resp_cmd,"loop send","HandleTCPClient"); /////logging
-			}
-
-		}else
-		{
-			resp_cmd = E_PING;
-			if(send(clntSocket, &resp_cmd, sizeof(resp_cmd), 0)  < 0)
-									DieWithError("send() failed");
-		}
-
-		//pthread_mutex_lock(&lock);
-		for(count = 0;count < 0;count++)
-		{
-			NyceMainLoop();
-		}
-		//pthread_mutex_unlock(&lock);
-
-
-		resp_cmd = 0;
-		memset(echoBuffer,0,sizeof(struct cmd_buff) + 256);
-		/* See if there is more data to receive */
-
-
-		if((recvMsgSize = recv(clntSocket, echoBuffer, sizeof(struct cmd_buff) + 256, 0)) < 0)
-			DieWithError("connection terminated");
-
-		memcpy(&cmdBuffer,echoBuffer,sizeof(cmdBuffer));
-		handleBuffer(echoBuffer,&resp_cmd);
-
-		for(count = 0;count < 1;count++)
-		{
-			NyceMainLoop();
-		}
-
-		if(!(resp_cmd == 16 ||resp_cmd == 17))
-		{
-			logging(99,(float)resp_cmd,"loop recieved","HandleTCPClient");/////////////////logging
-		}
-
-
-		if(stop_eth)
-		{
-			close(clntSocket); // if close event happened
-			break;
-		}
-	}
-	close(clntSocket); /* Close client socket */
-	printf("client socket close \n");
-}
-
 int handleBuffer(void *arg, int* resp_cmd)
 {
 
@@ -1401,158 +1135,85 @@ int handleBuffer(void *arg, int* resp_cmd)
 	*resp_cmd = 0;
 
 	switch(cmdFlg){
-	default:
-		if(buffer->cmd == E_CMD_FLG)
-			{
-				memcpy(CMD_FLG,buffer->fbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_CTR_FLG)
-			{
-				memcpy(CTR_FLG,buffer->fbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM0)
-			{
-				memcpy(AXS_NAM0,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM1)
-			{
-				memcpy(AXS_NAM1,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM2)
-			{
-				memcpy(AXS_NAM2,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM3)
-			{
-				memcpy(AXS_NAM3,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM4)
-			{
-				memcpy(AXS_NAM4,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM5)
-			{
-				memcpy(AXS_NAM5,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM6)
-			{
-				memcpy(AXS_NAM6,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM7)
-			{
-				memcpy(AXS_NAM7,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM8)
-			{
-				memcpy(AXS_NAM8,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM9)
-			{
-				memcpy(AXS_NAM9,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_TYPE)
-			{
-				memcpy(AXS_TYPE,buffer->cbuff,buffer->size);
-			}
-			else if((buffer->cmd == E_FORCE_LIMIT) && pShmem_data)
-			{
-				memcpy(pShmem_data->FORCE_LIMIT,buffer->fbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_NYCE_INIT)
-			{
-				sys_case = SYS_INIT;
-				puts("SYSTEM INIT");
-			}
-			else if(buffer->cmd == E_NYCE_STOP)
-			{
-				sys_case = SYS_STOP;
-				puts("SYSTEM STOP");
-			}
-			else
-			{
-				retVar = -1;
-				//pthread_mutex_unlock(&lock);
-			}
-		break;
-
 	case 2:
 		*resp_cmd = buffer->cmd - (2 * 10000);
 		break;
 	case 3:
 		*resp_cmd = buffer->cmd - (3 * 10000);
 		buffer->cmd = *resp_cmd;
-
-		if(buffer->cmd == E_CMD_FLG)
-			{
-				memcpy(CMD_FLG,buffer->fbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_CTR_FLG)
-			{
-				memcpy(CTR_FLG,buffer->fbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM0)
-			{
-				memcpy(AXS_NAM0,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM1)
-			{
-				memcpy(AXS_NAM1,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM2)
-			{
-				memcpy(AXS_NAM2,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM3)
-			{
-				memcpy(AXS_NAM3,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM4)
-			{
-				memcpy(AXS_NAM4,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM5)
-			{
-				memcpy(AXS_NAM5,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM6)
-			{
-				memcpy(AXS_NAM6,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM7)
-			{
-				memcpy(AXS_NAM7,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM8)
-			{
-				memcpy(AXS_NAM8,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_NAM9)
-			{
-				memcpy(AXS_NAM9,buffer->cbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_AXS_TYPE)
-			{
-				memcpy(AXS_TYPE,buffer->cbuff,buffer->size);
-			}
-			else if((buffer->cmd == E_FORCE_LIMIT) && pShmem_data)
-			{
-				memcpy(pShmem_data->FORCE_LIMIT,buffer->fbuff,buffer->size);
-			}
-			else if(buffer->cmd == E_NYCE_INIT)
-			{
-				sys_case = SYS_INIT;
-				puts("SYSTEM INIT");
-			}
-			else if(buffer->cmd == E_NYCE_STOP)
-			{
-				sys_case = SYS_STOP;
-				puts("SYSTEM STOP");
-			}
-			else
-			{
-				retVar = -1;
-				//pthread_mutex_unlock(&lock);
-			}
+	default:
+			if(buffer->cmd == E_CMD_FLG)
+				{
+					memcpy(CMD_FLG,buffer->fbuff,buffer->size);
+				}
+				else if(buffer->cmd == E_CTR_FLG)
+				{
+					memcpy(CTR_FLG,buffer->fbuff,buffer->size);
+				}
+				else if(buffer->cmd == E_AXS_NAM0)
+				{
+					memcpy(AXS_NAM0,buffer->cbuff,buffer->size);
+				}
+				else if(buffer->cmd == E_AXS_NAM1)
+				{
+					memcpy(AXS_NAM1,buffer->cbuff,buffer->size);
+				}
+				else if(buffer->cmd == E_AXS_NAM2)
+				{
+					memcpy(AXS_NAM2,buffer->cbuff,buffer->size);
+				}
+				else if(buffer->cmd == E_AXS_NAM3)
+				{
+					memcpy(AXS_NAM3,buffer->cbuff,buffer->size);
+				}
+				else if(buffer->cmd == E_AXS_NAM4)
+				{
+					memcpy(AXS_NAM4,buffer->cbuff,buffer->size);
+				}
+				else if(buffer->cmd == E_AXS_NAM5)
+				{
+					memcpy(AXS_NAM5,buffer->cbuff,buffer->size);
+				}
+				else if(buffer->cmd == E_AXS_NAM6)
+				{
+					memcpy(AXS_NAM6,buffer->cbuff,buffer->size);
+				}
+				else if(buffer->cmd == E_AXS_NAM7)
+				{
+					memcpy(AXS_NAM7,buffer->cbuff,buffer->size);
+				}
+				else if(buffer->cmd == E_AXS_NAM8)
+				{
+					memcpy(AXS_NAM8,buffer->cbuff,buffer->size);
+				}
+				else if(buffer->cmd == E_AXS_NAM9)
+				{
+					memcpy(AXS_NAM9,buffer->cbuff,buffer->size);
+				}
+				else if(buffer->cmd == E_AXS_TYPE)
+				{
+					memcpy(AXS_TYPE,buffer->cbuff,buffer->size);
+				}
+				else if((buffer->cmd == E_FORCE_LIMIT) && pShmem_data)
+				{
+					memcpy(pShmem_data->FORCE_LIMIT,buffer->fbuff,buffer->size);
+				}
+				else if(buffer->cmd == E_NYCE_INIT)
+				{
+					sys_case = SYS_INIT;
+					puts("SYSTEM INIT");
+				}
+				else if(buffer->cmd == E_NYCE_STOP)
+				{
+					sys_case = SYS_STOP;
+					puts("SYSTEM STOP");
+				}
+				else
+				{
+					retVar = -1;
+					//pthread_mutex_unlock(&lock);
+				}
+			break;
 	}
 
 
@@ -1561,12 +1222,10 @@ int handleBuffer(void *arg, int* resp_cmd)
 }
 
 
-
-
 void DieWithError(char* errorMessage)
 {
 	printf("%s \n",errorMessage);
-	//exit(1);
+	logging(100,100,errorMessage,"DieWithError");
 }
 
 
@@ -1638,7 +1297,7 @@ int initLogFile(void)
 }
 
 
-int logging(int axis,float payload,char* msg, char* retval)
+int logging(int axis,float payload,const char* msg, const char* retval)
 {
 
 char logmsg[180];

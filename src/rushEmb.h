@@ -278,7 +278,7 @@ FILE *logfile;
 char oldlogmsg[180];
 
 int initLogFile(void);
-int logging(int axis,float payload,char* msg, char* retval);
+int logging(int axis,float payload,const char* msg,const char* retval);
 int memsearch(const char *hay, int haysize, const char *needle, int needlesize);
 int closeLogFile(void);
 
