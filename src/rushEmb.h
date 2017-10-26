@@ -271,15 +271,15 @@ typedef struct cmd_buff
 	int					cmd;
 	int					size;
 	float				fbuff[80];
-	char				cbuff[20];
-	int					ibuff[20];
+	char				cbuff[80];
 }CMD_BUFF;
 
 FILE *logfile;
 char oldlogmsg[180];
 
 int initLogFile(void);
-int logging(int axis,float payload,char* msg,char* retval);
+int logging(int axis,float payload,char* msg, char* retval);
+int memsearch(const char *hay, int haysize, const char *needle, int needlesize);
 int closeLogFile(void);
 
 int debug;

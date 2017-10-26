@@ -383,37 +383,6 @@ void AxisInit(void)
  	}
 
 
-	//-----------------
-    // Connect the axes
-    //----------------
-//    for ( ax = 0; ax < 10; ax++ )
-//    {
-//		if (Axis_Type[ax] != NA)
-//		{
-//			StatusSConnect[ax] = SacConnect(Axis_Name[ax], &sacAxis[ax]);
-//
-//
-//			if (NyceSuccess(StatusSConnect[ax]))
-//			{
-//				if(NyceSuccess(SacReset(sacAxis[ax])))
-//				{
-//					SacSynchronize(sacAxis[ax],SAC_REQ_RESET,3);
-//				}
-//
-//				if(NyceSuccess(SacShutdown(sacAxis[ax])))
-//				{
-//					SacSynchronize(sacAxis[ax],SAC_REQ_SHUTDOWN,3);
-//				}
-//
-//				if(NyceSuccess(SacInitialize(sacAxis[ax], SAC_USE_FLASH)))
-//				{
-//					SacSynchronize(sacAxis[ax],SAC_REQ_INITIALIZE,3);
-//					printf("axis %d connected\n",ax);
-//					SacConnected[ax] = 255;
-//				}
-//			}
-//		}
-//	}
 
     for ( ax = 0; ax < 10; ax++ )
     {
@@ -778,7 +747,6 @@ void ExeParabolicProfile(int AxisID)
 	}
 }
 
-
 void EndForceUDSX(void)
 {
 	NYCE_STATUS return_stat;
@@ -1007,8 +975,6 @@ void StartUdsx(NHI_NODE nodeId, const char* udsxFilePath)
 void *server(void *arg)
 {
 	char *str;
-	struct ThreadArgs *threadArgs;
-	int servSock,clntSock,true_val = 1;
 	
 	
 	str = (char *)arg;
@@ -1031,6 +997,11 @@ void *server(void *arg)
 	int statusBufferSize;
 	int pingCmd;
 	
+	char recv_buffer_1024[1024];
+	int pointer;
+
+	char send_buffer_300[300];
+
 	
 	for (i = 0; i < max_clients; i++) 
     {
@@ -1183,7 +1154,7 @@ void *server(void *arg)
             if (FD_ISSET( sd , &readfds)) 
             {
                 //Check if it was for closing , and also read the incoming message
-                if ((recvMsgSize = recv(sd, echoBuffer, sizeof(struct cmd_buff) + 256, 0)) == 0)
+                if ((recvMsgSize = recv(sd, recv_buffer_1024, sizeof(recv_buffer_1024), 0)) == 0)
                 {
                     //Somebody disconnected , get his details and print
                     getpeername(sd , (struct sockaddr*)&address , (socklen_t*)&addrlen);
@@ -1197,15 +1168,27 @@ void *server(void *arg)
                 //Echo back the message that came in
                 else
                 {
-					memcpy(&cmdBuffer,echoBuffer,sizeof(cmdBuffer));
-					handleBuffer(&cmdBuffer,&resp_cmd);
+                	//find prefix
+					pointer = memsearch(recv_buffer_1024, sizeof(recv_buffer_1024), "786", 3);
+					if(pointer >= 0)
+					{
+						pointer = pointer + 3;
+						memcpy(&cmdBuffer,recv_buffer_1024 + pointer,sizeof(cmdBuffer));
+						handleBuffer(&cmdBuffer,&resp_cmd);
+					}
 					
 					if(resp_cmd)
 					{
 						NyceMainLoop();
 						memset(&nyceStatusBuffer,0,sizeof(nyceStatusBuffer));
 						prepareStatusBuffer(&nyceStatusBuffer,&statusBufferSize);
-						if(send(sd, &nyceStatusBuffer, statusBufferSize, 0)  < 0)
+
+						//prepare prefix
+
+						memcpy(send_buffer_300, "786", strlen("786"));
+						memcpy(send_buffer_300 + strlen("786"), &nyceStatusBuffer,sizeof(nyceStatusBuffer));
+
+						if(send(sd, send_buffer_300, sizeof(send_buffer_300), 0)  < 0)
 									DieWithError("send() failed");
 
 						if(!(resp_cmd == 16 || resp_cmd == 17))
@@ -1241,44 +1224,29 @@ void *server(void *arg)
     }
 	
 	
-	//////////////////////////////////////////////////////////////////////////////////////
-	
-
-//		for(;;) /* Run forever */
-//		{
-//			/* Set the size of the in-out parameter */
-//			clntLen = sizeof(echoClntAddr);
-//			/* Wait for a client to connect */
-//			if((clntSock = accept(servSock, (struct sockaddr*)&echoClntAddr, &clntLen)) < 0)
-//			{
-//				logging(177,177,"accept failed","server");
-//				DieWithError("accept() failed");
-//			}else
-//			{
-//				logging(177,177,"accept done","server");
-//				puts("client Accepted");
-//			}
-//
-//			/* Create separate memory for client argument */
-//			if ((threadArgs= (struct ThreadArgs*) malloc(sizeof(struct ThreadArgs))) == NULL)
-//				DieWithError("failed to create client handle");
-//
-//			threadArgs-> clntSock = clntSock;
-//
-//			/* clntSock is connected to a client! */
-//			printf("Handling Client %s\n", inet_ntoa(echoClntAddr.sin_addr));
-//				pthread_create(&pth,NULL,clientThread,(void*)threadArgs);
-//			puts("client thread created");
-//
-//			if(stop_eth)
-//			{
-//				close(servSock);
-//				break;
-//			}
-//		}
 	return 0;
     /* NOT REACHED */
 }
+
+
+/* binary search in memory */
+int memsearch(const char *hay, int haysize, const char *needle, int needlesize) {
+    int haypos, needlepos;
+    haysize -= needlesize;
+    for (haypos = 0; haypos <= haysize; haypos++) {
+        for (needlepos = 0; needlepos < needlesize; needlepos++) {
+            if (hay[haypos + needlepos] != needle[needlepos]) {
+                // Next character in haystack.
+                break;
+            }
+        }
+        if (needlepos == needlesize) {
+            return haypos;
+        }
+    }
+    return -1;
+}
+
 
 void *clientThread(void *arg)
 {
@@ -1484,7 +1452,7 @@ int handleBuffer(void *arg, int* resp_cmd)
 			}
 			else if(buffer->cmd == E_AXS_TYPE)
 			{
-				memcpy(AXS_TYPE,buffer->ibuff,buffer->size);
+				memcpy(AXS_TYPE,buffer->cbuff,buffer->size);
 			}
 			else if((buffer->cmd == E_FORCE_LIMIT) && pShmem_data)
 			{
@@ -1564,7 +1532,7 @@ int handleBuffer(void *arg, int* resp_cmd)
 			}
 			else if(buffer->cmd == E_AXS_TYPE)
 			{
-				memcpy(AXS_TYPE,buffer->ibuff,buffer->size);
+				memcpy(AXS_TYPE,buffer->cbuff,buffer->size);
 			}
 			else if((buffer->cmd == E_FORCE_LIMIT) && pShmem_data)
 			{
