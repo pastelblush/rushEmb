@@ -19,6 +19,7 @@
 #include <n4k_basictypes.h>
 #include <nycedefs.h>
 #include <nhivariables.h>
+#include "dyad.h"
 
 /* Helper macros */
 #define USR_ERROR(x)    (NYCE_STATUS)(NYCE_ERROR_MASK | (N4K_SS_USR << NYCE_SUBSYS_SHIFT) | (x))
@@ -102,72 +103,12 @@ typedef struct shmem_data
 } SHMEM_DATA;
 
 
-
-struct ThreadArgs {
-	int clntSock;
-};
+unsigned int		OLD_STAT_FLG[10];
+float				OLD_NET_CURRENT[10];
+float				OLD_CMD_FLG[10];
 
 int resp_cmd;
-
-void DieWithError(char* errorMessage); /* Error handling function */
-void HandleTCPClient(int clntSocketc);   /* TCP client handling function */
-void *server(void *arg);
-int handleBuffer(void *arg,int* resp_cmd);
-void *ExecuteCmd(void *arg);
-void initializeBuffer(void);
-void NyceMainLoop(void);
-void *clientThread(void *arg);
-void socketSetUp(int socket);
-void prepareStatusBuffer(void *statBuff, int* buffersize);
-int NyceDisconnectAxis(void);
-int waitforUDSX(int active);
-
-
-struct sockaddr_in echoServAddr; /* Local address */
-struct sockaddr_in echoClntAddr; /* Client address */
-unsigned short echoServPort;    /* Server port */
-unsigned int clntLen;           /* Length of client address data structure */
-pthread_t pth,serverpth,execmd;
-
-
-
-
-
-enum{
-	E_NO_CMD,
-	E_CMD_FLG,
-	E_CTR_FLG,
-	E_AXS_NAM0,
-	E_AXS_NAM1,
-	E_AXS_NAM2,
-	E_AXS_NAM3,
-	E_AXS_NAM4,
-	E_AXS_NAM5,
-	E_AXS_NAM6,
-	E_AXS_NAM7,
-	E_AXS_NAM8,
-	E_AXS_NAM9,
-	E_AXS_TYPE,
-
-	E_FORCE_LIMIT,
-	E_NET_CURRENT,
-	E_STAT_FLG,
-	E_VC_POS,
-
-	E_NYCE_INIT,
-	E_NYCE_STOP,
-
-	E_PING = 4114,
-
-};
-
-
-#define MAXPENDING 5                   /* Maximum outstanding connection requests */
-#define PORT 6666
-#define MAX_BUFFER_SIZE 1024
-
-
-
+float 				FORCE_LIMIT[10];
 ///nyce main loop
 
 float CMD_FLG[10];
@@ -248,39 +189,71 @@ int Ready;
 int stop_eth;
 
 
-enum{
-	SYS_IDLE,
-	SYS_INIT,
-	SYS_READY,
-	SYS_STOP,
+enum E_CMD{
+	E_NO_CMD,
+	E_CMD_FLG,
+	E_CTR_FLG,
+	E_AXS_NAM0,
+	E_AXS_NAM1,
+	E_AXS_NAM2,
+	E_AXS_NAM3,
+	E_AXS_NAM4,
+	E_AXS_NAM5,
+	E_AXS_NAM6,
+	E_AXS_NAM7,
+	E_AXS_NAM8,
+	E_AXS_NAM9,
+	E_AXS_TYPE,
+
+
+	E_FORCE_LIMIT,
+	E_NET_CURRENT,
+	E_STAT_FLG,
+	E_VC_POS,
+
+	E_NYCE_INIT,
+	E_NYCE_STOP,
+
+	E_REQ_STAT,
+	E_SYS_CASE,
+
+	E_PING = 4114,
+
 };
+
 
 typedef struct resp_buff
 {
 	int					status;
 	int					sys_case;
 	float 				VC_POS[20];
-	float 				FORCE_LIMIT[10];
 	float 				NET_CURRENT[10];
 	float				CMD_FLG[10];
-	unsigned int		Shared_StatFlag[10];
+	unsigned int		STAT_FLG[10];
 }RESP_BUFF;
 
-typedef struct cmd_buff
-{
-	int					cmd;
-	int					size;
-	float				fbuff[80];
-	char				cbuff[80];
-}CMD_BUFF;
+
+enum SEQ_SYS{
+	SYS_IDLE,
+	SYS_INIT,
+	SYS_READY,
+	SYS_STOP,
+};
+
+
 
 FILE *logfile;
 char oldlogmsg[180];
 
+void DieWithError(char* errorMessage); /* Error handling function */
+void NyceMainLoop(void);
+int NyceDisconnectAxis(void);
+int waitforUDSX(int active);
 int initLogFile(void);
 int logging(int axis,float payload,const char* msg,const char* retval);
 int memsearch(const char *hay, int haysize, const char *needle, int needlesize);
 int closeLogFile(void);
+uint32_t GetTimeStamp_ms();
 
 int debug;
 
@@ -295,5 +268,15 @@ int server_port_list[max_clients];
 int ports[max_ports];
 fd_set readfds;
 
+char nodeAddress[80];
+
+void rushMakeBuffer(char* bufferout, char* bufferin, int* pointer, int size, char flag);
+int rushSearchBuffer(unsigned long int* start, int* buffersize, int* size, char *flag, unsigned long int oriStart, int oriSize);
+int rushMemsearch(const char *hay, int haysize, const char *needle, int needlesize);
+static void onData(dyad_Event *e);
+static void onAccept(dyad_Event *e);
+static void onError(dyad_Event *e);
+static void onReady(dyad_Event *e);
+void updateThreadFunc(void);
 
 #endif
