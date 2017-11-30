@@ -126,6 +126,7 @@ void updateThreadFunc(void)
 			dyad_update();
 			}
 		}
+		//usleep(10);
 	}
 
 }
@@ -147,7 +148,7 @@ int main(void)
 	dyad_addListener(s, DYAD_EVENT_ERROR, onError, NULL);
 	dyad_addListener(s, DYAD_EVENT_ACCEPT, onAccept, NULL);
 	dyad_listen(s, 6666);
-	dyad_setUpdateTimeout(0);
+	//dyad_setUpdateTimeout(0);
 	pthread_create(&updateThread,0,updateThreadFunc,0);
 	logging(100,0,"Start ETH server","success");  ////////////////log
 
@@ -465,6 +466,7 @@ void NyceMainLoop(void)
 		{
 			if (SacConnected[ax] == 255)
 			{
+
 
 				if (CMD_FLG[ax] != 0)
 				{
@@ -984,7 +986,7 @@ int rushMemsearch(const char *hay, int haysize, const char *needle, int needlesi
 static void onData(dyad_Event *e)
 {
 
-	char send_buffer_300[300];
+	char send_buffer_300[400];
 
 
 	int pSend;
@@ -1082,30 +1084,14 @@ static void onData(dyad_Event *e)
 	NyceMainLoop();
 
 
-}
-
-static void onAccept(dyad_Event *e) {
-	dyad_addListener(e->remote, DYAD_EVENT_DATA, onData, NULL);
-	dyad_addListener(e->remote, DYAD_EVENT_DATA, onReady, NULL);
-	int opt = 1;
-	dyad_setNoDelay(e->remote, opt);
-	int socket = dyad_getSocket(e->remote);
-	setsockopt(socket, SOL_SOCKET, SO_DONTROUTE, &opt, sizeof(opt));
-
-	dyad_writef(e->remote, "echo server\r\n");
-}
-
-static void onError(dyad_Event *e) {
-	printf("server error: %s\n", e->msg);
-}
-
-static void onReady(dyad_Event *e){
-	char send_buffer_300[300];
 
 
-	int pSend;
-	int sentCount = 0;
-	int x;
+//	char send_buffer_300[300];
+
+
+//	int pSend;
+//	int sentCount = 0;
+//	int x;
 
 	memset(send_buffer_300, 0, sizeof(send_buffer_300));
 
@@ -1143,20 +1129,41 @@ static void onReady(dyad_Event *e){
 			}
 		}
 
-	//	for(x = 0 ; x<10 ; x++)
-	//	{
-	//		if(CMD_FLG[x] != OLD_CMD_FLG[x])
-	//		{
-	//			rushMakeBuffer(send_buffer_300, CMD_FLG, &pSend, sizeof(float) * 10, E_CMD_FLG);
-	//			memcpy(OLD_CMD_FLG,CMD_FLG,sizeof(OLD_CMD_FLG));
-	//			break;
-	//		}
-	//	}
+//		for(x = 0 ; x<10 ; x++)
+//		{
+//			if(CMD_FLG[x] != OLD_CMD_FLG[x])
+//			{
+//				rushMakeBuffer(send_buffer_300, CMD_FLG, &pSend, sizeof(float) * 10, E_CMD_FLG);
+//				memcpy(OLD_CMD_FLG,CMD_FLG,sizeof(OLD_CMD_FLG));
+//				break;
+//			}
+//		}
 
 
 		rushMakeBuffer(send_buffer_300, &sys_case, &pSend, sizeof(char) * 1, E_SYS_CASE);
 		dyad_write(e->stream, send_buffer_300, pSend);
 
+
+
+}
+
+static void onAccept(dyad_Event *e) {
+	dyad_addListener(e->remote, DYAD_EVENT_DATA, onData, NULL);
+	//dyad_addListener(e->remote, DYAD_EVENT_DATA, onReady, NULL);
+	int opt = 1;
+	dyad_setNoDelay(e->remote, opt);
+	int socket = dyad_getSocket(e->remote);
+	setsockopt(socket, SOL_SOCKET, SO_DONTROUTE, &opt, sizeof(opt));
+
+	dyad_writef(e->remote, "echo server\r\n");
+}
+
+static void onError(dyad_Event *e) {
+	printf("server error: %s\n", e->msg);
+}
+
+static void onReady(dyad_Event *e){
+;
 }
 
 
